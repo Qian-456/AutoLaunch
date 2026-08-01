@@ -1,0 +1,82 @@
+# ============================================================
+# AutoLaunch · AI 数字发布会开源框架 · .gitignore
+# Node.js / Vite / React 标准忽略 + GLB 模型忽略 + 系统文件
+# ============================================================
+
+# ---------- 依赖 ----------
+node_modules/
+.pnp/
+.pnp.js
+.yarn/install-state.gz
+
+# ---------- 编译输出 ----------
+dist/
+dist-ssr/
+build/
+out/
+*.local
+
+# ---------- 编辑器/IDE ----------
+.vscode/*
+!.vscode/extensions.json
+!.vscode/README.md
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ---------- 日志与调试 ----------
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+*.log
+
+# ---------- 环境变量（密钥绝不入库） ----------
+.env
+.env.local
+.env.*.local
+# .env.example 必须保留
+
+# ---------- 测试与覆盖率 ----------
+coverage/
+*.lcov
+.nyc_output/
+playwright-report/
+test-results/
+.nyc_output/
+
+# ---------- 3D 模型与大型媒体（CC 授权模型通过脚本下载，不直接入库） ----------
+# 根目录模型源文件
+*.glb
+*.gltf
+*.fbx
+*.obj
+*.stl
+
+# public/assets 中的二进制模型文件（保留 README / pack.json / node-map 等 JSON 配置）
+public/assets/*.glb
+public/assets/*.gltf
+public/assets/*.fbx
+public/assets/*.hdr
+public/assets/*.bin
+
+# ---------- 录制与媒体输出 ----------
+recordings/
+*.mkv
+*.mp4
+*.mov
+*.zip
+*.tar.gz
+
+# ---------- 系统 ----------
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.tmp
+*.temp
