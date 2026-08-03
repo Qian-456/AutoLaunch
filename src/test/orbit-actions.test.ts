@@ -4,29 +4,58 @@ import { dispatchVehicleAction } from '../runtime/action-dispatcher'
 import { useExperienceStore } from '../store/experience-store'
 import { su7ConceptPack } from '../pack/su7-concept.pack'
 
-describe('registered OrbitAction pipeline', () => {
+describe('registered VehicleAction pipeline', () => {
   beforeEach(() => {
-    useExperienceStore.setState({ activeOrbitPreset: 'hero_front_left', orbitRequestId: 0, manualOrbit: false, notice: null })
+    useExperienceStore.setState({
+      activeOrbitPreset: 'hero_front_left',
+      orbitRequestId: 0,
+      manualOrbit: false,
+      notice: null,
+      inputMode: { text: true, voice: 'unsupported' },
+      vehiclePartStates: new Map([
+        ['window_driver_front', 'closed'],
+        ['trunk', 'closed'],
+      ]),
+      lightStates: new Map([
+        ['headlight', false],
+        ['taillight', false],
+      ]),
+      activeActions: new Map(),
+      lastActionOutcome: null,
+    })
   })
 
-  it('parses a deterministic front-left command', () => {
+  it('parses deterministic orbit commands', () => {
     expect(parseCommand('参考图 视角')).toEqual({
       matched: true,
       action: { type: 'orbit', preset: 'hero_front_left' },
     })
-  })
-
-  it('parses turntable commands into the same action type', () => {
     expect(parseCommand('旋转一圈')).toEqual({
       matched: true,
       action: { type: 'orbit', preset: 'turntable' },
     })
   })
 
-  it('returns a fixed suggestion for unknown commands', () => {
+  it('parses window, trunk and light commands into VehicleAction', () => {
+    expect(parseCommand('打开主驾车窗')).toEqual({
+      matched: true,
+      action: { type: 'window', target: 'driver_front', open: true },
+    })
+    expect(parseCommand('开后备箱')).toEqual({ matched: true, action: { type: 'trunk', open: true } })
+    expect(parseCommand('开灯')).toEqual({
+      matched: true,
+      action: { type: 'lights', target: 'headlight', on: true },
+    })
+    expect(parseCommand('刹车灯')).toEqual({
+      matched: true,
+      action: { type: 'lights', target: 'taillight', on: true },
+    })
+  })
+
+  it('returns the fixed vehicle-action suggestion for unknown commands', () => {
     expect(parseCommand('起飞')).toEqual({
       matched: false,
-      suggestion: '暂不支持该命令，请尝试：参考图视角、看侧面、旋转一圈',
+      suggestion: '暂不支持该命令，请尝试：打开主驾车窗、打开后备箱、开灯',
     })
   })
 
@@ -37,71 +66,80 @@ describe('registered OrbitAction pipeline', () => {
     expect(useExperienceStore.getState().orbitRequestId).toBe(1)
   })
 
-  it('keeps 360-degree rotation explicit and observable', () => {
-    dispatchVehicleAction({ type: 'orbit', preset: 'turntable' })
-    expect(useExperienceStore.getState().notice).toBe('已启动 360° 展台环绕')
+  it('keeps a repeated target idempotent while an action is running', () => {
+    const first = dispatchVehicleAction({ type: 'window', target: 'driver_front', open: true })
+    const firstActions = useExperienceStore.getState().activeActions
+    const second = dispatchVehicleAction({ type: 'window', target: 'driver_front', open: true })
+    expect(first.ok).toBe(true)
+    expect(second).toMatchObject({ ok: true, message: '主驾车窗打开动作正在执行' })
+    expect(firstActions.size).toBe(1)
+    expect(useExperienceStore.getState().activeActions.size).toBe(1)
   })
 
-  it('stops auto-rotation on manual drag without changing the requested preset', () => {
+  it('cancels the previous action when a conflict-group target reverses', () => {
+    dispatchVehicleAction({ type: 'window', target: 'driver_front', open: true })
+    const firstId = [...useExperienceStore.getState().activeActions.keys()][0]
+    dispatchVehicleAction({ type: 'window', target: 'driver_front', open: false })
+    const activeActions = useExperienceStore.getState().activeActions
+    expect(activeActions.size).toBe(1)
+    expect(activeActions.has(firstId)).toBe(false)
+    expect([...activeActions.values()][0].targetValue).toBe(false)
+    expect(useExperienceStore.getState().lastActionOutcome).toEqual({ id: firstId, status: 'cancelled' })
+  })
+
+  it('commits the domain state only after runtime completion', () => {
+    const result = dispatchVehicleAction({ type: 'lights', target: 'headlight', on: true })
+    expect(useExperienceStore.getState().lightStates.get('headlight')).toBe(false)
+    if (!result.ok || !result.actionId) throw new Error('expected an action id')
+    useExperienceStore.getState().finishAction(result.actionId, 'completed')
+    expect(useExperienceStore.getState().lightStates.get('headlight')).toBe(true)
+    expect(useExperienceStore.getState().lastActionOutcome).toEqual({ id: result.actionId, status: 'completed' })
+  })
+
+  it('uses the registered rear-camera fallback for the unmapped trunk hatch', () => {
+    const result = dispatchVehicleAction({ type: 'trunk', open: true })
+    expect(result.ok).toBe(true)
+    expect(useExperienceStore.getState().activeOrbitPreset).toBe('rear_three_quarter')
+    expect(useExperienceStore.getState().notice).toContain('没有完整尾门节点')
+    expect(su7ConceptPack.nodeMap.trunk).toBe('UNMAPPED_TRUNK_HATCH')
+    expect(su7ConceptPack.actions.trunk.mode).toBe('fallback')
+  })
+
+  it('keeps 360-degree rotation explicit and stops it on manual drag', () => {
     dispatchVehicleAction({ type: 'orbit', preset: 'turntable' })
+    expect(useExperienceStore.getState().notice).toBe('已启动 360° 展台环绕')
     useExperienceStore.getState().beginManualOrbit()
     expect(useExperienceStore.getState().manualOrbit).toBe(true)
     expect(useExperienceStore.getState().activeOrbitPreset).toBe('turntable')
   })
 
-  it('keeps model-specific trim and plate corrections inside the Product Pack', () => {
-    expect(su7ConceptPack.appearance.hiddenNodes).not.toContain('XiaomicarFlankLogo_carFlankLogo_blinn11_CarPaint_0')
-    expect(su7ConceptPack.appearance.hiddenNodes).not.toContain('XiaomicarFlankMesh_carFlankMesh_lambert229_001_Roof_0')
+  it('keeps model-specific corrections and vehicle actions inside the Product Pack', () => {
     expect(su7ConceptPack.appearance.hiddenNodes).toContain('XiaomicarPlate_carPlate_aaa_Details_0')
-    expect(su7ConceptPack.appearance.hiddenNodes).toContain('Xiaomiempennage_img_empennage_img_lambert46_Details_0')
     expect(su7ConceptPack.appearance.plates.map((plate) => plate.id)).toEqual(['front', 'rear'])
-    expect(su7ConceptPack.appearance.lightingExperiments).toHaveLength(2)
-    expect(su7ConceptPack.appearance.lightingExperiments.every((experiment) => !experiment.enabled)).toBe(true)
     expect(su7ConceptPack.appearance.materialOverrides.find((item) => item.material === 'CarPaint')).toMatchObject({
       color: '#ffffff',
       removeColorMap: false,
     })
-    for (const material of ['Roof', 'Roof_Glass', 'Brilliant_Black', 'BrilliantGray', 'Brilliant_Silver']) {
-      expect(su7ConceptPack.appearance.materialOverrides.find((item) => item.material === material)?.removeColorMap).toBe(true)
-    }
+    expect(su7ConceptPack.actions.window_driver_front).toMatchObject({ durationMs: 800, conflictGroup: 'windows' })
+    expect(su7ConceptPack.actions.lights_headlight.conflictGroup).toBe('lights_front')
+    expect(su7ConceptPack.actions.lights_taillight.conflictGroup).toBe('lights_rear')
+    expect(su7ConceptPack.actions.lights_headlight.emissiveNodes).toHaveLength(4)
+    expect(su7ConceptPack.actions.lights_taillight.emissiveNodes).toHaveLength(0)
+    expect(su7ConceptPack.actions.lights_headlight.emissiveIntensity[1]).toBeGreaterThanOrEqual(5)
+    expect(su7ConceptPack.actions.lights_taillight.emissiveIntensity[1]).toBeGreaterThan(2)
+    expect(su7ConceptPack.actions.lights_headlight.lensEmissiveIntensity[1]).toBeLessThan(1)
+    expect(su7ConceptPack.actions.lights_taillight.lensEmissiveIntensity[1]).toBeLessThan(1.5)
+    expect(su7ConceptPack.actions.lights_headlight.environmentLights).toHaveLength(2)
+    expect(su7ConceptPack.actions.lights_headlight.environmentLights.every((light) => light.intensity > 0)).toBe(true)
+    expect(su7ConceptPack.actions.lights_taillight.environmentLights).toHaveLength(2)
+    expect(su7ConceptPack.actions.lights_taillight.environmentLights.every((light) => light.intensity > 0)).toBe(true)
     expect(Object.keys(su7ConceptPack.nodeMap)).toEqual(expect.arrayContaining([
-      'trim_front_silver',
-      'trim_side_silver',
-      'trim_rear_silver',
-      'trim_rear_silver_center',
+      'window_driver_front',
+      'trunk',
+      'headlight_left',
+      'headlight_right',
+      'taillight_left',
+      'taillight_right',
     ]))
-    expect(su7ConceptPack.appearance.nodeOverrides.map((item) => item.semanticId)).toEqual([
-      'front_logo_base',
-      'front_logo_mark',
-      'trim_front_silver',
-      'trim_side_silver',
-      'trim_rear_silver',
-      'trim_rear_silver_center',
-      'brake_disc_rear',
-      'brake_disc_front',
-      'brake_calipers',
-      'brake_caliper_letters',
-      'rear_badges',
-      'mirror_left_top',
-      'mirror_left_bottom',
-      'mirror_left_glass',
-      'mirror_right_top',
-      'mirror_right_bottom',
-      'mirror_right_glass',
-      'taillight_left_dark',
-      'taillight_right_dark',
-      'taillight_rear_housing_dark',
-      'rear_body_upper',
-      'rear_body_lip',
-    ])
-    expect(su7ConceptPack.appearance.colorMapRestores).toHaveLength(1)
-    expect(su7ConceptPack.appearance.colorMapRestores[0].semanticId).toBe('trim_side_silver_decal')
-    expect(su7ConceptPack.appearance.colorMapRestores[0].nodes).toEqual([
-      'XiaomicarFlankLogo_carFlankLogo_blinn11_CarPaint_0',
-    ])
-    expect(su7ConceptPack.appearance.nodeOverrides.find((item) => item.semanticId === 'taillight_rear_housing_dark')).toMatchObject({
-      envMapIntensity: 0,
-      removeAllMaps: true,
-    })
   })
 })

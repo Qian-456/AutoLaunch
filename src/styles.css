@@ -32,7 +32,7 @@ button { cursor: pointer; }
 .topbar { border-bottom: 1px solid rgba(255,255,255,.1); }
 .brand { display: flex; align-items: center; gap: 14px; }
 .brand-mark { width: 4px; height: 42px; background: #ffd000; box-shadow: 0 0 18px rgba(255,208,0,.45); }
-.brand p, .camera-panel > p, .eyebrow { margin: 0; color: #ffd000; font-size: 10px; letter-spacing: .22em; }
+.brand p, .camera-panel > p, .vehicle-panel > p, .eyebrow { margin: 0; color: #ffd000; font-size: 10px; letter-spacing: .22em; }
 .brand h1 { margin: 3px 0 0; font-size: 18px; letter-spacing: .12em; font-weight: 650; }
 
 .model-state { display: flex; align-items: center; gap: 9px; color: #8f969f; font-size: 10px; letter-spacing: .14em; }
@@ -68,7 +68,7 @@ button { cursor: pointer; }
   backdrop-filter: blur(18px);
   box-shadow: 0 20px 50px rgba(0,0,0,.3);
 }
-.camera-panel h2 { margin: 5px 0 17px; font-size: 18px; font-weight: 520; }
+.camera-panel h2, .vehicle-panel h2 { margin: 5px 0 17px; font-size: 18px; font-weight: 520; }
 .camera-buttons { display: grid; gap: 7px; }
 .camera-buttons button {
   display: flex;
@@ -85,6 +85,38 @@ button { cursor: pointer; }
 }
 .camera-buttons button:hover, .camera-buttons button.active { color: #fff; border-color: rgba(255,208,0,.35); background: rgba(255,208,0,.09); }
 .camera-buttons button span { color: #ffd000; font-size: 10px; }
+
+.vehicle-panel {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  left: 34px;
+  width: 210px;
+  transform: translateY(-50%);
+  padding: 20px;
+  border: 1px solid rgba(255,255,255,.11);
+  border-radius: 4px;
+  background: rgba(14,17,21,.78);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 20px 50px rgba(0,0,0,.3);
+}
+.vehicle-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.vehicle-buttons button {
+  min-height: 38px;
+  padding: 8px 6px;
+  color: #bbc0c6;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: rgba(255,255,255,.035);
+  font-size: 11px;
+  transition: .2s ease;
+}
+.vehicle-buttons button:hover:not(:disabled), .vehicle-buttons button.active {
+  color: #fff;
+  border-color: rgba(255,208,0,.35);
+  background: rgba(255,208,0,.09);
+}
+.vehicle-buttons button:disabled { cursor: not-allowed; opacity: .45; }
 
 .interaction-drawer {
   position: absolute;
@@ -139,10 +171,15 @@ button { cursor: pointer; }
   border-bottom: 0;
 }
 .interaction-bar label { display: block; margin-bottom: 7px; color: #9da4ac; font-size: 10px; letter-spacing: .12em; }
-.interaction-bar form > div { display: grid; grid-template-columns: 1fr 66px; gap: 8px; }
+.interaction-bar form > div { display: grid; grid-template-columns: 1fr 44px 66px; gap: 8px; }
 .interaction-bar input { min-width: 0; padding: 11px 12px; color: #fff; outline: none; border: 1px solid #30353c; border-radius: 3px; background: #0b0d10; }
 .interaction-bar input:focus { border-color: #b99a15; }
 .interaction-bar button, .scene-error button { color: #111; border: 0; border-radius: 3px; background: #ffd000; font-weight: 700; }
+.interaction-bar .voice-button { color: #d8dadd; border: 1px solid #30353c; background: #171a1f; }
+.interaction-bar .voice-button:hover:not(:disabled) { border-color: #b99a15; }
+.interaction-bar .voice-button.listening { color: #ff675f; border-color: rgba(255,103,95,.6); animation: voice-pulse 1s ease-in-out infinite; }
+.interaction-bar .voice-button:disabled { cursor: not-allowed; opacity: .42; }
+@keyframes voice-pulse { 50% { box-shadow: 0 0 14px rgba(255,103,95,.4); } }
 .interaction-bar > p { margin: 8px 1px 0; color: #858c94; font-size: 11px; }
 
 .loading-card, .scene-error {

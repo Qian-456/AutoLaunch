@@ -50,6 +50,10 @@ const nodes = document.nodes.map((node, index) => ({
   index,
   name: node.name || '(unnamed)',
   type: node.mesh === undefined ? 'Group' : 'Mesh',
+  children: node.children?.map((childIndex) => ({
+    index: childIndex,
+    name: document.nodes[childIndex]?.name || '(unnamed)',
+  })) ?? [],
   ...(nodeBounds[index] && !nodeBounds[index].isEmpty()
     ? {
         bounds: {
