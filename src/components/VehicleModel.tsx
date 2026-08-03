@@ -58,6 +58,30 @@ export function VehicleModel() {
           }
           material.needsUpdate = true
         }
+        const nodeOverride = su7ConceptPack.appearance.nodeOverrides.find((item) => item.node === object.name)
+        if (nodeOverride && material.isMeshStandardMaterial) {
+          material.color = new Color(nodeOverride.color)
+          material.metalness = nodeOverride.metalness
+          material.roughness = nodeOverride.roughness
+          material.map = null
+          material.emissive.set('#000000')
+          material.emissiveMap = null
+          material.vertexColors = false
+          material.needsUpdate = true
+        }
+        const colorMapRestore = su7ConceptPack.appearance.colorMapRestores.find((item) =>
+          item.nodes.includes(object.name as never),
+        )
+        if (colorMapRestore && material.isMeshStandardMaterial) {
+          material.color = new Color(colorMapRestore.color)
+          material.metalness = colorMapRestore.metalness
+          material.roughness = colorMapRestore.roughness
+          material.map = (source as MeshStandardMaterial).map
+          material.emissive.set('#000000')
+          material.emissiveMap = null
+          material.vertexColors = false
+          material.needsUpdate = true
+        }
         return material
       })
       mesh.material = Array.isArray(mesh.material) ? clonedMaterials : clonedMaterials[0]

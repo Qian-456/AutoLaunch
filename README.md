@@ -212,6 +212,12 @@ AutoLaunch/
 
 FBX 源文件对照记录：`2025-xiaomi-su7-ultra/source/FINAL_MODEL_SU7U/FINAL_MODEL_SU7U.fbx` 与 GLB 使用同一套对象命名。侧身灰色长条来自 `CarPaint_Decal.png`，不是 `carFlankLogo` 或 `carFlankMesh` 几何；GLB 的 `CarPaint.baseColorTexture` 也对应这一贴花，因此运行时仅禁用该颜色贴图，保留侧身节点。`carRoofShape.png` 本身包含白色车顶区域，当前深色车顶覆盖同样属于有依据的材质校正。
 
+银色饰条分离记录：GLB 节点包围盒确认 `carPlastic_BrilliantGray_1` 位于车头、`carFlankMesh` 位于两侧下沿、`carPlastic_BrilliantGray_2` 与 `carMetal_Silver` 位于车尾。它们已分别注册为 `trim_front_silver`、`trim_side_silver`、`trim_rear_silver` 和 `trim_rear_silver_center`。门板中部的长条与 `Ultra` 字样来自 `CarPaint_Decal`，但贴图直接恢复到四块门板会令把手发生灰色 UV 串色；因此当前仅在专用 `carFlankLogo` 覆盖节点恢复贴图，登记为 `trim_side_silver_decal`。车顶、机盖、门板和其他车身节点继续禁用贴图。轮内刹车盘使用石墨黑节点覆盖，卡钳使用黄色覆盖，避免轮毂内部出现大块银白色。运行时先执行共享材质修正，再执行 Product Pack 的节点级材质覆盖，因此恢复银色饰条不会同时提亮车顶、尾翼或窗框。
+
+尾部车身徽标 `xiaomi`、中文“小米”和车型字样由独立 `carXiaoMi_1` 节点承载，Product Pack 将其注册为 `rear_badges` 并覆盖为低金属度黑色。React 创建的前后车牌不属于该节点，因此车牌文字颜色不受影响。
+
+左右后视镜的上壳、下壳与镜面组件分别注册为六个 `mirror_*` 语义节点。上下壳使用低金属度纯黑材质，镜面使用带轻微反射的深黑材质，避免共享 `CarPaint` 和 `CHROME_Logo` 令后视镜出现黄色或银白色。
+
 边缘瑕疵校正：FBX/GLB 材质表显示 `Brilliant_Black`、`BrilliantGray` 与 `Brilliant_Silver` 共享亮色贴图，且原 `Brilliant_Silver` 带异常发光因子。Pack 会清除这些贴图和发光，将前后唇、窗框及侧裙统一为低金属度深黑材质；`Roof`、`Roof_Glass`、`Windows` 同样去除白色源贴图。Canvas 使用 1.5–2 倍像素比和最高 8 倍各向异性过滤，并降低展示灯光强度以减少边缘锯齿、摩尔纹与过曝白边。
 
 ## FastAPI 一键部署

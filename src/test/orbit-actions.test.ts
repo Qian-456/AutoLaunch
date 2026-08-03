@@ -61,5 +61,33 @@ describe('registered OrbitAction pipeline', () => {
     for (const material of ['Roof', 'Roof_Glass', 'Brilliant_Black', 'BrilliantGray', 'Brilliant_Silver']) {
       expect(su7ConceptPack.appearance.materialOverrides.find((item) => item.material === material)?.removeColorMap).toBe(true)
     }
+    expect(Object.keys(su7ConceptPack.nodeMap)).toEqual(expect.arrayContaining([
+      'trim_front_silver',
+      'trim_side_silver',
+      'trim_rear_silver',
+      'trim_rear_silver_center',
+    ]))
+    expect(su7ConceptPack.appearance.nodeOverrides.map((item) => item.semanticId)).toEqual([
+      'trim_front_silver',
+      'trim_side_silver',
+      'trim_rear_silver',
+      'trim_rear_silver_center',
+      'brake_disc_rear',
+      'brake_disc_front',
+      'brake_calipers',
+      'brake_caliper_letters',
+      'rear_badges',
+      'mirror_left_top',
+      'mirror_left_bottom',
+      'mirror_left_glass',
+      'mirror_right_top',
+      'mirror_right_bottom',
+      'mirror_right_glass',
+    ])
+    expect(su7ConceptPack.appearance.colorMapRestores).toHaveLength(1)
+    expect(su7ConceptPack.appearance.colorMapRestores[0].semanticId).toBe('trim_side_silver_decal')
+    expect(su7ConceptPack.appearance.colorMapRestores[0].nodes).toEqual([
+      'XiaomicarFlankLogo_carFlankLogo_blinn11_CarPaint_0',
+    ])
   })
 })
