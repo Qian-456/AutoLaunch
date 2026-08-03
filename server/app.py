@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-MODEL_RELATIVE_PATH = Path("assets/2025_xiaomi_su7_ultra.glb")
+MODEL_RELATIVE_PATH = Path("assets/su7_ultra.glb")
 
 
 def resolve_dist_dir(value: str | Path | None = None) -> Path:

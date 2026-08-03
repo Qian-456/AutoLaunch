@@ -3,7 +3,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { Box3, Matrix4, Quaternion, Vector3 } from 'three'
 
-const modelPath = path.resolve(process.argv[2] ?? 'public/assets/2025_xiaomi_su7_ultra.glb')
+const modelPath = path.resolve(process.argv[2] ?? 'public/assets/su7_ultra.glb')
 const nodeFilter = process.argv[3] ? new RegExp(process.argv[3], 'i') : null
 const buffer = await fs.readFile(modelPath)
 const jsonLength = buffer.readUInt32LE(12)

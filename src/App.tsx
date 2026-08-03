@@ -33,7 +33,7 @@ class SceneErrorBoundary extends Component<{ children: ReactNode }, { failed: bo
       return (
         <div className="scene-error" role="alert">
           <strong>模型加载失败</strong>
-          <span>请确认 public/assets/2025_xiaomi_su7_ultra.glb 存在后刷新页面。</span>
+          <span>请确认 public/assets/su7_ultra.glb 存在后刷新页面。</span>
           <button onClick={() => window.location.reload()}>重新加载</button>
         </div>
       )
@@ -44,6 +44,7 @@ class SceneErrorBoundary extends Component<{ children: ReactNode }, { failed: bo
 
 export function App() {
   const [command, setCommand] = useState('')
+  const [isCommandDrawerOpen, setIsCommandDrawerOpen] = useState(false)
   const [feedback, setFeedback] = useState('拖动车身区域可自由旋转 · 滚轮缩放')
   const modelStatus = useExperienceStore((state) => state.modelStatus)
   const activeOrbitPreset = useExperienceStore((state) => state.activeOrbitPreset)
@@ -132,25 +133,38 @@ export function App() {
           </div>
         </aside>
 
-        <div className="interaction-bar">
-          <form onSubmit={submitCommand}>
-            <label htmlFor="camera-command">文字控制 OrbitAction</label>
-            <div>
-              <input
-                id="camera-command"
-                value={command}
-                onChange={(event) => setCommand(event.target.value)}
-                placeholder="试试：参考图视角 / 看侧面 / 旋转一圈"
-              />
-              <button type="submit">执行</button>
-            </div>
-          </form>
-          <p>{feedback}</p>
+        <div className={`interaction-drawer${isCommandDrawerOpen ? ' interaction-drawer--open' : ''}`}>
+          <button
+            className="interaction-drawer__handle"
+            type="button"
+            aria-expanded={isCommandDrawerOpen}
+            aria-controls="command-drawer-content"
+            onClick={() => setIsCommandDrawerOpen((open) => !open)}
+          >
+            <span aria-hidden="true">{isCommandDrawerOpen ? '⌄' : '⌃'}</span>
+            文字控制
+          </button>
+          <div className="interaction-bar" id="command-drawer-content" aria-hidden={!isCommandDrawerOpen}>
+            <form onSubmit={submitCommand}>
+              <label htmlFor="camera-command">文字控制 OrbitAction</label>
+              <div>
+                <input
+                  id="camera-command"
+                  value={command}
+                  onChange={(event) => setCommand(event.target.value)}
+                  placeholder="试试：参考图视角 / 看侧面 / 旋转一圈"
+                  tabIndex={isCommandDrawerOpen ? 0 : -1}
+                />
+                <button type="submit" tabIndex={isCommandDrawerOpen ? 0 : -1}>执行</button>
+              </div>
+            </form>
+            <p>{feedback}</p>
+          </div>
         </div>
       </section>
 
       <footer className="legal-bar">
-        <span>{import.meta.env.VITE_APP_UNOFFICIAL_DISCLAIMER || '非官方概念演示 | 模型：TechFreak（Sketchfab CC BY 4.0）| 不代表小米官方'}</span>
+        <span>{import.meta.env.VITE_APP_UNOFFICIAL_DISCLAIMER || '非官方概念演示 | 模型：Ddiaz Design（Sketchfab CC BY-NC-SA 4.0）| 不代表小米官方'}</span>
         <span>
           来源：<a href={su7ConceptPack.attribution.sourceUrl} target="_blank" rel="noreferrer">Sketchfab</a>
           {' · '}

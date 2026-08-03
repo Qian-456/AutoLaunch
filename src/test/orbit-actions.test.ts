@@ -57,7 +57,10 @@ describe('registered OrbitAction pipeline', () => {
     expect(su7ConceptPack.appearance.plates.map((plate) => plate.id)).toEqual(['front', 'rear'])
     expect(su7ConceptPack.appearance.lightingExperiments).toHaveLength(2)
     expect(su7ConceptPack.appearance.lightingExperiments.every((experiment) => !experiment.enabled)).toBe(true)
-    expect(su7ConceptPack.appearance.materialOverrides.find((item) => item.material === 'CarPaint')?.removeColorMap).toBe(true)
+    expect(su7ConceptPack.appearance.materialOverrides.find((item) => item.material === 'CarPaint')).toMatchObject({
+      color: '#ffffff',
+      removeColorMap: false,
+    })
     for (const material of ['Roof', 'Roof_Glass', 'Brilliant_Black', 'BrilliantGray', 'Brilliant_Silver']) {
       expect(su7ConceptPack.appearance.materialOverrides.find((item) => item.material === material)?.removeColorMap).toBe(true)
     }
@@ -68,6 +71,8 @@ describe('registered OrbitAction pipeline', () => {
       'trim_rear_silver_center',
     ]))
     expect(su7ConceptPack.appearance.nodeOverrides.map((item) => item.semanticId)).toEqual([
+      'front_logo_base',
+      'front_logo_mark',
       'trim_front_silver',
       'trim_side_silver',
       'trim_rear_silver',

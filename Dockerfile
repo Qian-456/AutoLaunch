@@ -3,7 +3,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
-RUN test -f public/assets/2025_xiaomi_su7_ultra.glb && npm run build
+RUN test -f public/assets/su7_ultra.glb && npm run build
 
 FROM python:3.13-slim AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 \

@@ -86,18 +86,57 @@ button { cursor: pointer; }
 .camera-buttons button:hover, .camera-buttons button.active { color: #fff; border-color: rgba(255,208,0,.35); background: rgba(255,208,0,.09); }
 .camera-buttons button span { color: #ffd000; font-size: 10px; }
 
-.interaction-bar {
+.interaction-drawer {
   position: absolute;
   z-index: 3;
   left: 50%;
-  bottom: 25px;
+  bottom: 0;
   width: min(660px, calc(100% - 540px));
   transform: translateX(-50%);
+  pointer-events: none;
+}
+.interaction-drawer__handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 132px;
+  height: 31px;
+  margin: 0 auto;
+  color: #d7d9dc;
+  border: 1px solid rgba(255,255,255,.14);
+  border-bottom: 0;
+  border-radius: 5px 5px 0 0;
+  background: rgba(13,16,20,.88);
+  backdrop-filter: blur(18px);
+  font-size: 11px;
+  letter-spacing: .1em;
+  pointer-events: auto;
+}
+.interaction-drawer__handle:hover { color: #fff; border-color: rgba(255,208,0,.38); }
+.interaction-drawer__handle span { color: #ffd000; font-size: 14px; line-height: 1; }
+.interaction-bar {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(10px);
+  pointer-events: none;
+  transition: max-height .28s ease, opacity .2s ease, transform .28s ease, padding .28s ease, border-color .2s ease;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 5px 5px 0 0;
+  background: rgba(13,16,20,.88);
+  backdrop-filter: blur(18px);
+}
+.interaction-drawer--open .interaction-bar {
+  max-height: 132px;
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
   padding: 14px 16px 11px;
   border: 1px solid rgba(255,255,255,.12);
-  border-radius: 5px;
-  background: rgba(13,16,20,.84);
-  backdrop-filter: blur(18px);
+  border-bottom: 0;
 }
 .interaction-bar label { display: block; margin-bottom: 7px; color: #9da4ac; font-size: 10px; letter-spacing: .12em; }
 .interaction-bar form > div { display: grid; grid-template-columns: 1fr 66px; gap: 8px; }

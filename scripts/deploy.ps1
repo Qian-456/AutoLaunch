@@ -7,14 +7,14 @@
 
 $ErrorActionPreference = "Stop"
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
-$ModelPath = Join-Path $ProjectRoot "public\assets\2025_xiaomi_su7_ultra.glb"
+$ModelPath = Join-Path $ProjectRoot "public\assets\su7_ultra.glb"
 $VirtualEnvironment = Join-Path $ProjectRoot ".venv"
 $PythonExecutable = Join-Path $VirtualEnvironment "Scripts\python.exe"
 
 Push-Location $ProjectRoot
 try {
     if (-not (Test-Path -LiteralPath $ModelPath -PathType Leaf)) {
-        throw "缺少模型：$ModelPath。请先准备 2025_xiaomi_su7_ultra.glb。"
+        throw "缺少模型：$ModelPath。请先准备 su7_ultra.glb。"
     }
 
     if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {

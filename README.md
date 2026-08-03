@@ -3,7 +3,7 @@
 > **非官方概念演示 · 开源框架**
 > AutoLaunch 是一个面向汽车行业的交互式数字发布会框架：AI 可以根据用户兴趣重新选择章节、镜头、车辆动作与讲解；用户可通过点击/文字/语音随时打断并接管控制权。
 
-> ⚠ 当前为 **v0.0.0 初始锚点版本**：仅包含项目规则与 TRAE 子 Agent 配置。首个可运行 Demo（v0.1 homework-mvp，约 90 秒 SU7 Ultra 发布会 × 四入口接管）将在后续提交上线。
+> 当前为可运行的 **3D Orbit Preview**：已实现 SU7 Ultra 模型展示、五个注册镜头、按钮与文字统一派发 `VehicleAction`、360° 环绕、手动拖动接管，以及基于 Product Pack 的材质与银线 Mesh 校正。90 秒四章节发布会、车辆部件动作、语音和完整接管流程仍属于后续 v0.1 homework-mvp 里程碑。
 
 ---
 
@@ -77,24 +77,24 @@ npm run test:coverage    # 生成覆盖率报告
 ```
 
 脚本逻辑：
-1. 若 `public\assets\2025_xiaomi_su7_ultra.glb` 已存在 → 直接退出。
-2. 若项目根目录存在 `2025_xiaomi_su7_ultra.glb` → 自动复制到目标路径。
+1. 若 `public\assets\su7_ultra.glb` 已存在 → 直接退出。
+2. 若项目根目录存在 `su7_ultra.glb` → 自动复制到目标路径。
 3. 否则打开 Sketchfab 页面供用户手动下载，并给出拷贝位置指引。
 
 ### 手动下载
 
 1. 访问（需注册 Sketchfab 免费账号登录）：
-   https://sketchfab.com/3d-models/2025-xiaomi-su7-ultra-19da48fdd841430b90046c7ed43b3cc8#download
+   https://skfb.ly/pKv9Z
 2. 点击 `Download` → 下载 **glTF Binary (.glb)** 格式。
-3. 放到 `public\assets\2025_xiaomi_su7_ultra.glb`（推荐）或项目根目录 `2025_xiaomi_su7_ultra.glb`。
+3. 放到 `public\assets\su7_ultra.glb`（推荐）或项目根目录 `su7_ultra.glb`。
 
 ### ⚠ 合规强制要求
 
-当前页面实际加载的 `2025_xiaomi_su7_ultra.glb` 内嵌元数据显示其受 **CC BY 4.0** 协议约束，任何公开展示（页面 / 视频 / 截图 / 文章）**必须**同时显示：
+当前页面实际加载的 `su7_ultra.glb` 内嵌元数据显示其受 **CC BY-NC-SA 4.0** 协议约束，任何公开展示（页面 / 视频 / 截图 / 文章）**必须**同时显示：
 
-- **原作者**：TechFreak
+- **原作者**：Ddiaz Design
 - **来源**：Sketchfab
-- **许可协议**：CC BY 4.0（必须署名）
+- **许可协议**：CC BY-NC-SA 4.0（非商业使用 + 署名 + 相同方式共享）
 - **非官方声明**：本演示为非官方概念作品，不代表小米或任何品牌官方立场
 
 **禁止事项**：不得将 SU7 模型用于直接商业用途（出售、广告、品牌合作物料、暗示官方合作等）。对外商业化演示前，请替换为原创或商业授权明确的模型。
@@ -193,7 +193,7 @@ AutoLaunch/
 | 组成 | 版权/协议 | 来源 | 说明 |
 |---|---|---|---|
 | AutoLaunch 项目源码 | MIT（待 v0.1 时补 LICENSE 文件） | 本仓库 | 框架代码 |
-| Xiaomi SU7 Ultra 3D 模型 | **CC BY 4.0** | Sketchfab · TechFreak | 必须署名；详见上节 |
+| Xiaomi SU7 Ultra 3D 模型 | **CC BY-NC-SA 4.0** | Sketchfab · Ddiaz Design | 非商业使用、署名、相同方式共享；详见上节 |
 | 架构文档 / Subagent 配置 | CC BY 4.0（署名即可） | 本仓库 | 自由复用 |
 
 > ⚠ 本项目为**非官方概念演示**，与小米或任何汽车品牌不存在官方合作关系。任何公开内容必须同时显示"非官方"声明。
@@ -204,7 +204,7 @@ AutoLaunch/
 
 手动验收：
 
-1. 执行 `npm run inspect:glb`，确认输出 `2025_xiaomi_su7_ultra.glb`、307 个节点和有效包围盒。
+1. 执行 `npm run inspect:glb`，确认输出 `su7_ultra.glb`、307 个节点和有效包围盒。
 2. 执行 `npm run dev`，打开 `http://localhost:5173`；10 秒内应看到黄色车模、黑色轮圈、完整署名且无 404。
 3. 依次点击五个镜头按钮，再输入“旋转一圈”；确认 450ms 平滑切换，拖动车模后提示“不会自动恢复镜头”。
 
@@ -240,4 +240,4 @@ Docker 部署：
 docker compose up --build
 ```
 
-部署前会强制检查 `public/assets/2025_xiaomi_su7_ultra.glb`，Vite 构建后 FastAPI 同源托管页面、JS/CSS 与模型文件；模型缺失或构建产物不完整时会直接失败，不会启动一个空白站点。
+部署前会强制检查 `public/assets/su7_ultra.glb`，Vite 构建后 FastAPI 同源托管页面、JS/CSS 与模型文件；模型缺失或构建产物不完整时会直接失败，不会启动一个空白站点。
