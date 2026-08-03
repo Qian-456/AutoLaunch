@@ -105,6 +105,29 @@ describe('registered VehicleAction pipeline', () => {
     })
   })
 
+  it('parses natural spoken window progress phrases', () => {
+    expect(parseCommand('主驾驶车窗开一半')).toEqual({
+      matched: true,
+      action: { type: 'window', target: 'driver_front', open: true, progress: 50 },
+    })
+    expect(parseCommand('车窗打开百分之五十')).toEqual({
+      matched: true,
+      action: { type: 'window', target: 'driver_front', open: true, progress: 50 },
+    })
+    expect(parseCommand('副驾驶车窗降到三成')).toEqual({
+      matched: true,
+      action: { type: 'window', target: 'passenger_front', open: true, progress: 30 },
+    })
+    expect(parseCommand('主驾车窗打开百分之七十五')).toEqual({
+      matched: true,
+      action: { type: 'window', target: 'driver_front', open: true, progress: 75 },
+    })
+    expect(parseCommand('打开５０％')).toEqual({
+      matched: true,
+      action: { type: 'window', target: 'driver_front', open: true, progress: 50 },
+    })
+  })
+
   it('parses bulk window commands (全部车窗)', () => {
     expect(parseCommand('全部车窗打开')).toEqual({
       matched: true,
@@ -248,7 +271,18 @@ describe('registered VehicleAction pipeline', () => {
     expect(useExperienceStore.getState().activeActions.size).toBe(0)
   })
 
+  it('keeps the launch timeline active when the user takes over the camera', () => {
+    useExperienceStore.getState().setStageMode('launch')
+    useExperienceStore.getState().requestOrbit('rear_three_quarter')
+    useExperienceStore.getState().beginManualOrbit()
+
+    expect(useExperienceStore.getState().stageMode).toBe('launch')
+    expect(useExperienceStore.getState().manualOrbit).toBe(true)
+    expect(useExperienceStore.getState().cameraControlOwner).toBe('orbit')
+  })
+
   it('registers a real 90-second four-chapter launch script', () => {
+    expect(su7ConceptPack.orbitActions.turntable.autoRotateSpeed).toBe(2.25)
     expect(su7ConceptPack.launchScript).toHaveLength(4)
     expect(su7ConceptPack.launchScript.reduce((sum, chapter) => sum + chapter.durationMs, 0)).toBe(90_000)
     expect(su7ConceptPack.launchScript.map((chapter) => chapter.camera)).toEqual([
@@ -258,6 +292,16 @@ describe('registered VehicleAction pipeline', () => {
       'turntable',
     ])
     expect(su7ConceptPack.launchScript.some((chapter) => chapter.actions.some(({ action }) => action.type === 'trunk'))).toBe(true)
+  })
+
+  it('registers a compact recording timeline that reuses VehicleAction', () => {
+    expect(su7ConceptPack.recordingScript).toHaveLength(6)
+    expect(su7ConceptPack.recordingScript.reduce((sum, chapter) => sum + chapter.durationMs, 0)).toBe(69_000)
+    const actionTypes = new Set(su7ConceptPack.recordingScript.flatMap((chapter) => (
+      chapter.actions.map(({ action }) => action.type)
+    )))
+    expect(actionTypes).toEqual(new Set(['trunk', 'window', 'lights']))
+    expect(su7ConceptPack.recordingScript.every((chapter) => chapter.narration.length > 0)).toBe(true)
   })
 
   it('maps a clicked child mesh back to its Product Pack window target', () => {

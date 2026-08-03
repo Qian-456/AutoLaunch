@@ -2,10 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { su7ConceptPack } from '../pack/su7-concept.pack'
 import { dispatchVehicleAction } from '../runtime/action-dispatcher'
 import { useExperienceStore } from '../store/experience-store'
+import type { LaunchChapter } from '../types'
 
 type LaunchPlayerProps = {
   active: boolean
   onFinished: () => void
+  script?: readonly LaunchChapter[]
 }
 
 export type LaunchPlaybackView = {
@@ -14,20 +16,25 @@ export type LaunchPlaybackView = {
   finished: boolean
 }
 
-export function LaunchPlayer({ active, onFinished }: LaunchPlayerProps) {
+export function LaunchPlayer({ active, onFinished, script = su7ConceptPack.launchScript }: LaunchPlayerProps) {
   const [view, setView] = useState<LaunchPlaybackView>({ chapterIndex: 0, elapsedMs: 0, finished: false })
   const firedActions = useRef(new Set<number>())
   const chapterStartedAt = useRef(0)
   const requestOrbit = useExperienceStore((state) => state.requestOrbit)
-  const chapter = su7ConceptPack.launchScript[view.chapterIndex]
+  const manualOrbit = useExperienceStore((state) => state.manualOrbit)
+  const chapter = script[view.chapterIndex]
   const totalDurationMs = useMemo(
-    () => su7ConceptPack.launchScript.reduce((sum, item) => sum + item.durationMs, 0),
-    [],
+    () => script.reduce((sum, item) => sum + item.durationMs, 0),
+    [script],
   )
   const elapsedBeforeChapter = useMemo(
-    () => su7ConceptPack.launchScript.slice(0, view.chapterIndex).reduce((sum, item) => sum + item.durationMs, 0),
-    [view.chapterIndex],
+    () => script.slice(0, view.chapterIndex).reduce((sum, item) => sum + item.durationMs, 0),
+    [script, view.chapterIndex],
   )
+
+  useEffect(() => {
+    if (active && !manualOrbit) requestOrbit(chapter.camera)
+  }, [active, chapter.camera, manualOrbit, requestOrbit])
 
   useEffect(() => {
     if (!active) {
@@ -36,7 +43,6 @@ export function LaunchPlayer({ active, onFinished }: LaunchPlayerProps) {
     }
     firedActions.current = new Set()
     chapterStartedAt.current = performance.now()
-    requestOrbit(chapter.camera)
 
     const timer = window.setInterval(() => {
       const elapsedMs = performance.now() - chapterStartedAt.current
@@ -48,7 +54,7 @@ export function LaunchPlayer({ active, onFinished }: LaunchPlayerProps) {
       })
 
       if (elapsedMs >= chapter.durationMs) {
-        const isLast = view.chapterIndex === su7ConceptPack.launchScript.length - 1
+        const isLast = view.chapterIndex === script.length - 1
         if (isLast) {
           window.clearInterval(timer)
           setView((current) => ({ ...current, elapsedMs: chapter.durationMs, finished: true }))
@@ -62,7 +68,7 @@ export function LaunchPlayer({ active, onFinished }: LaunchPlayerProps) {
     }, 100)
 
     return () => window.clearInterval(timer)
-  }, [active, chapter, onFinished, requestOrbit, view.chapterIndex])
+  }, [active, chapter, onFinished, script.length, view.chapterIndex])
 
   if (!active && !view.finished) return null
 
@@ -70,7 +76,7 @@ export function LaunchPlayer({ active, onFinished }: LaunchPlayerProps) {
   return (
     <aside className="launch-player" aria-live="polite">
       <div className="launch-player__meta">
-        <span>{view.finished ? '演示完成' : `CH ${view.chapterIndex + 1} / ${su7ConceptPack.launchScript.length}`}</span>
+        <span>{view.finished ? '发布会完成' : `CH ${view.chapterIndex + 1} / ${script.length}`}</span>
         <strong>{view.finished ? '您可以自由体验车辆' : chapter.title}</strong>
       </div>
       <p>{view.finished ? '点击车辆部件或退出发布会模式继续探索。' : chapter.narration}</p>

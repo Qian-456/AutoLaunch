@@ -9,8 +9,39 @@ export type ParseResult =
  * Returns the parsed number or undefined if no percentage was present.
  * Accepts forms like 50%, 50 ％, open 30 etc as long as the digits are present.
  */
+function parseChineseProgress(raw: string): number | undefined {
+  const digits: Record<string, number> = {
+    零: 0, 〇: 0, 一: 1, 二: 2, 两: 2, 三: 3, 四: 4,
+    五: 5, 六: 6, 七: 7, 八: 8, 九: 9,
+  }
+  if (raw === '百' || raw === '一百') return 100
+  const tenIndex = raw.indexOf('十')
+  if (tenIndex >= 0) {
+    const tens = tenIndex === 0 ? 1 : digits[raw[tenIndex - 1]]
+    const ones = tenIndex === raw.length - 1 ? 0 : digits[raw[tenIndex + 1]]
+    if (tens === undefined || ones === undefined) return undefined
+    return tens * 10 + ones
+  }
+  if (raw.length === 1) return digits[raw]
+  return undefined
+}
+
 function extractProgress(normalized: string): number | undefined {
-  const match = normalized.match(/(\d{1,3})\s*(?:%|％)?/)
+  if (/(一半|半开|开半|降一半|降半|半降)/.test(normalized)) return 50
+
+  const chinesePercent = normalized.match(/百分之([零〇一二两三四五六七八九十百]{1,4})/)
+  if (chinesePercent) {
+    const parsed = parseChineseProgress(chinesePercent[1])
+    if (parsed !== undefined) return Math.max(0, Math.min(100, parsed))
+  }
+
+  const chineseRatio = normalized.match(/([一二两三四五六七八九十])成/)
+  if (chineseRatio) {
+    const parsed = parseChineseProgress(chineseRatio[1])
+    if (parsed !== undefined) return Math.max(0, Math.min(100, parsed * 10))
+  }
+
+  const match = normalized.match(/(?:百分之)?(\d{1,3})\s*(?:%|％)?/)
   if (!match) return undefined
   const raw = Number.parseInt(match[1], 10)
   if (Number.isNaN(raw)) return undefined
@@ -26,8 +57,8 @@ function extractProgress(normalized: string): number | undefined {
 const windowSpecs: Array<[RegExp, Exclude<WindowTarget, 'all'>]> = [
   [/主驾后(排)?(车)?窗|左后(车)?窗|driverrear/i, 'driver_rear'],
   [/副驾后(排)?(车)?窗|右后(车)?窗|passengerrear/i, 'passenger_rear'],
-  [/副驾(前)?(车)?窗|右前(车)?窗|passenger(front)?/i, 'passenger_front'],
-  [/主驾(前)?(车)?窗|左前(车)?窗|driver(front)?/i, 'driver_front'],
+  [/副驾(驶)?(前)?(车)?窗|副驾驶位(车)?窗|右前(车)?窗|passenger(front)?/i, 'passenger_front'],
+  [/主驾(驶)?(前)?(车)?窗|驾驶位(车)?窗|左前(车)?窗|driver(front)?/i, 'driver_front'],
 ]
 
 /** Matches bulk "all windows" style commands. */
@@ -38,7 +69,12 @@ const openVerbs = /(打开|降下|下降|降|开启|开|降到|打开到|开启�
 const closeVerbs = /(关闭|升起|关上|升|关|升到|关闭到|升至|上到)/
 
 function parseWindowCommand(normalized: string): ParseResult | null {
-  if (!/(车)?窗|window/i.test(normalized)) return null
+  const explicitProgress = extractProgress(normalized)
+  const namesWindow = /(车)?窗|window/i.test(normalized)
+  const progressOnlyWindowCommand = explicitProgress !== undefined
+    && (openVerbs.test(normalized) || closeVerbs.test(normalized))
+    && !/(后备箱|尾门|灯|trunk|light)/i.test(normalized)
+  if (!namesWindow && !progressOnlyWindowCommand) return null
 
   let target: WindowTarget | null = null
 
@@ -53,9 +89,11 @@ function parseWindowCommand(normalized: string): ParseResult | null {
     }
   }
 
-  if (!target) return null
+  // A generic singular "车窗" command defaults to the MVP's primary
+  // controllable part: the driver-front window. Explicit all/four-window
+  // phrases are resolved above and never reach this fallback.
+  if (!target) target = 'driver_front'
 
-  const explicitProgress = extractProgress(normalized)
   const hasOpenVerb = openVerbs.test(normalized)
   const hasCloseVerb = closeVerbs.test(normalized)
 
@@ -93,7 +131,10 @@ const FALLBACK_SUGGESTION =
   '暂不支持该命令，请尝试：打开主驾车窗、主驾车窗50%、全部车窗打开'
 
 export function parseCommand(input: string): ParseResult {
-  const normalized = input.replace(/\s+/g, '').trim()
+  const normalized = input
+    .replace(/[０-９]/g, (digit) => String.fromCharCode(digit.charCodeAt(0) - 0xFEE0))
+    .replace(/\s+/g, '')
+    .trim()
   if (!normalized) return { matched: false, suggestion: FALLBACK_SUGGESTION }
 
   const orbit = orbitCommands.find(([pattern]) => pattern.test(normalized))

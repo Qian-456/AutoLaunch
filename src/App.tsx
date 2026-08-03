@@ -16,7 +16,7 @@ const orbitButtons: Array<{ preset: OrbitPreset; label: string }> = [
   { preset: 'front', label: '前脸' },
   { preset: 'driver_side', label: '主驾侧' },
   { preset: 'rear_three_quarter', label: '车尾' },
-  { preset: 'turntable', label: '360°' },
+  { preset: 'turntable', label: '自动运镜' },
 ]
 
 const commandExamples = ['打开主驾车窗', '副驾车窗50%', '打开后备箱', '开灯'] as const
@@ -64,7 +64,8 @@ export function App() {
   const [command, setCommand] = useState('')
   const [isCommandDrawerOpen, setIsCommandDrawerOpen] = useState(false)
   const [isControlPanelOpen, setIsControlPanelOpen] = useState(false)
-  const [isRecordingView, setIsRecordingView] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [launchCountdown, setLaunchCountdown] = useState<number | null>(null)
   const [feedback, setFeedback] = useState('拖动车身区域可自由旋转 · 滚轮缩放 · 文字可输入：主驾车窗50%')
   const { progress: loadingProgress } = useProgress()
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null)
@@ -119,7 +120,7 @@ export function App() {
     if (clearAfter) setCommand('')
   }, [])
 
-  const toggleLaunchMode = useCallback(() => {
+  const toggleLaunchMode = useCallback(async () => {
     if (useExperienceStore.getState().stageMode === 'launch') {
       setStageMode('studio')
       setFeedback('发布会已停止，控制权已交还给您')
@@ -127,45 +128,61 @@ export function App() {
     }
     setIsControlPanelOpen(false)
     setIsCommandDrawerOpen(false)
-    useExperienceStore.getState().requestOrbit(su7ConceptPack.launchScript[0].camera)
-    setStageMode('launch')
-    setFeedback('发布会已开始 · 拖动镜头或点击车窗可随时接管')
-  }, [setStageMode])
-
-  const finishLaunch = useCallback(() => {
-    setFeedback('演示完成，您可以退出发布会模式继续自由体验')
-  }, [])
-
-  const enterRecordingView = useCallback(async () => {
-    setIsControlPanelOpen(false)
-    setIsCommandDrawerOpen(false)
-    setIsRecordingView(true)
+    setStageMode('studio')
+    dispatchVehicleAction({ type: 'trunk', open: false })
+    dispatchVehicleAction({ type: 'window', target: 'all', open: false, progress: 0 })
+    dispatchVehicleAction({ type: 'lights', target: 'headlight', on: false })
+    dispatchVehicleAction({ type: 'lights', target: 'taillight', on: false })
+    useExperienceStore.getState().requestOrbit(su7ConceptPack.recordingScript[0].camera)
+    setLaunchCountdown(3)
+    setFeedback('发布会准备开始 · 3 秒后自动执行镜头、动作与字幕')
     try {
       if (!document.fullscreenElement) await document.documentElement.requestFullscreen()
     } catch {
-      setFeedback('浏览器未允许全屏，已进入纯净界面；可按 F11 隐藏浏览器边框')
+      setFeedback('浏览器未允许全屏；发布会仍会正常开始，可按 F11 手动进入全屏')
     }
+  }, [setStageMode])
+
+  const finishLaunch = useCallback(() => {
+    setFeedback('发布会演示完成，您可以继续自由体验车辆')
   }, [])
 
-  const exitRecordingView = useCallback(async () => {
-    setIsRecordingView(false)
-    if (document.fullscreenElement) await document.exitFullscreen().catch(() => undefined)
+  const toggleFullscreen = useCallback(async () => {
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen()
+      } else {
+        await document.documentElement.requestFullscreen()
+      }
+    } catch {
+      setFeedback('浏览器未允许切换全屏，请检查浏览器权限后重试')
+    }
   }, [])
 
   useEffect(() => {
-    const handleFullscreenChange = () => {
-      if (!document.fullscreenElement) setIsRecordingView(false)
-    }
+    const handleFullscreenChange = () => setIsFullscreen(Boolean(document.fullscreenElement))
     document.addEventListener('fullscreenchange', handleFullscreenChange)
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
   }, [])
 
   useEffect(() => {
+    if (launchCountdown === null) return
+    const timer = window.setTimeout(() => {
+      if (launchCountdown === 1) {
+        setLaunchCountdown(null)
+        setStageMode('launch')
+        return
+      }
+      setLaunchCountdown((current) => current === null ? null : current - 1)
+    }, 1_000)
+    return () => window.clearTimeout(timer)
+  }, [launchCountdown, setStageMode])
+
+  useEffect(() => {
     if (stageMode === 'launch' && manualOrbit) {
-      setStageMode('studio')
-      setFeedback('您已拖动镜头并接管演示；发布会不会自动恢复')
+      setFeedback('您已接管发布会镜头；字幕与动作继续，相机不会自动恢复')
     }
-  }, [manualOrbit, setStageMode, stageMode])
+  }, [manualOrbit, stageMode])
 
   useEffect(() => {
     const recognition = createBrowserSpeechRecognition()
@@ -232,7 +249,7 @@ export function App() {
   }
 
   return (
-    <main className={`app-shell${isRecordingView ? ' app-shell--recording' : ''}`}>
+    <main className={`app-shell${isFullscreen && stageMode === 'launch' ? ' app-shell--launch-fullscreen' : ''}${isFullscreen && stageMode === 'launch' && manualOrbit ? ' app-shell--manual-orbit' : ''}`}>
       <header className="topbar">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true" />
@@ -245,13 +262,14 @@ export function App() {
           <button
             className={`stage-mode-button${stageMode === 'launch' ? ' active' : ''}`}
             type="button"
+            disabled={modelStatus !== 'ready'}
             onClick={toggleLaunchMode}
           >
             <span aria-hidden="true" />
-            {stageMode === 'launch' ? '停止发布会' : '开始发布会'}
+            {stageMode === 'launch' ? '停止发布会' : '开启发布会'}
           </button>
-          <button className="recording-view-button" type="button" onClick={enterRecordingView}>
-            纯净录制
+          <button className="fullscreen-button" type="button" onClick={toggleFullscreen}>
+            {isFullscreen ? '退出全屏' : '全屏浏览'}
           </button>
           <div className={`model-state model-state--${modelStatus}`}>
             <span />
@@ -295,12 +313,18 @@ export function App() {
 
         {notice && <div className="notice">{notice}</div>}
 
-        <LaunchPlayer active={stageMode === 'launch' && modelStatus === 'ready'} onFinished={finishLaunch} />
+        <LaunchPlayer
+          active={stageMode === 'launch' && modelStatus === 'ready'}
+          onFinished={finishLaunch}
+          script={su7ConceptPack.recordingScript}
+        />
 
-        {isRecordingView && (
-          <button className="recording-view-exit" type="button" onClick={exitRecordingView}>
-            退出纯净录制
-          </button>
+        {launchCountdown !== null && (
+          <div className="launch-countdown" role="status" aria-live="assertive">
+            <small>SHOW READY</small>
+            <strong>{launchCountdown}</strong>
+            <span>镜头、动作与字幕即将自动开始</span>
+          </div>
         )}
 
         <div className="control-deck">
