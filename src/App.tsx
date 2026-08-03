@@ -70,6 +70,14 @@ export function App() {
   const voiceState = useExperienceStore((state) => state.inputMode.voice)
   const windowProgress = useExperienceStore((state) => state.windowProgress)
   const trunkState = useExperienceStore((state) => state.vehiclePartStates.get('trunk'))
+  const trunkTargetOpen = useExperienceStore((state) => {
+    for (const execution of state.activeActions.values()) {
+      if (execution.action.type === 'hatch' || execution.action.type === 'trunk') {
+        return execution.targetValue
+      }
+    }
+    return undefined
+  })
   const headlightOn = useExperienceStore((state) => state.lightStates.get('headlight'))
   const taillightOn = useExperienceStore((state) => state.lightStates.get('taillight'))
   const setVoiceState = useExperienceStore((state) => state.setVoiceState)
@@ -285,7 +293,7 @@ export function App() {
               </button>
               {singleVehicleControls.map(({ id, label, enable, disable }) => {
                 const active = id === 'trunk'
-                  ? trunkState === 'open'
+                  ? (trunkTargetOpen ?? trunkState === 'open')
                   : id === 'headlight' ? Boolean(headlightOn) : Boolean(taillightOn)
                 return (
                   <button

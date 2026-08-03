@@ -48,6 +48,7 @@ const initialPartStates = () =>
     ['window_passenger_front', 'closed'],
     ['window_driver_rear', 'closed'],
     ['window_passenger_rear', 'closed'],
+    ['hatch_rear', 'closed'],
     ['trunk', 'closed'],
   ])
 
@@ -131,6 +132,10 @@ export const useExperienceStore = create<ExperienceState>((set) => ({
         const target = execution.action.target as Exclude<WindowTarget, 'all'>
         vehiclePartStates.set(windowPartId(target), 'moving')
       }
+      if (execution.action.type === 'hatch') {
+        vehiclePartStates.set('hatch_rear', 'moving')
+        vehiclePartStates.set('trunk', 'moving')
+      }
       if (execution.action.type === 'trunk') vehiclePartStates.set('trunk', 'moving')
 
       return {
@@ -159,8 +164,12 @@ export const useExperienceStore = create<ExperienceState>((set) => ({
             : Math.max(0, Math.min(100, Math.round(execution.startProgress ?? (committedValue ? 100 : 0))))
         windowProgress.set(target, committedProgress)
         vehiclePartStates.set(windowPartId(target), partStateFromProgress(committedProgress))
+      } else if (execution.action.type === 'hatch') {
+        vehiclePartStates.set('hatch_rear', committedValue ? 'open' : 'closed')
+        vehiclePartStates.set('trunk', committedValue ? 'open' : 'closed')
       } else if (execution.action.type === 'trunk') {
         vehiclePartStates.set('trunk', committedValue ? 'open' : 'closed')
+        vehiclePartStates.set('hatch_rear', committedValue ? 'open' : 'closed')
       } else if (execution.action.type === 'lights') {
         lightStates.set(execution.action.target, committedValue)
       }

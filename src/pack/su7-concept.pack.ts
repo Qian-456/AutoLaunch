@@ -9,7 +9,12 @@ import type { OrbitActionDefinition, OrbitPreset, WindowTarget } from '../types'
  */
 export type WindowActionDefinition = {
   durationMs: number
-  conflictGroup: 'windows'
+  /**
+   * Conflict group key. Historically this was `windows` for all four panes;
+   * in v0.1 we allow per-target keys so concurrent independent windows can
+   * animate without cancelling each other.
+   */
+  conflictGroup: string
   /** Translation axis applied to the real node. */
   axis: 'Y' | 'X' | 'Z'
   /** Offset at 0% (closed). Relative to the node's baked position. */
@@ -30,6 +35,35 @@ export type WindowActionDefinition = {
     /** Per-axis offset the placeholder descends at 100% progress (meters). */
     descendOffset: readonly [number, number, number]
   }
+}
+
+/** Rear hatch assembled from registered GLB parts under one hinge pivot. */
+export type HatchActionDefinition = {
+  durationMs: number
+  conflictGroup: 'rear'
+  /** Pivot axis in the original GLB coordinate system. */
+  hingeAxis: 'X'
+  /**
+   * Location of the hinge line in unscaled GLB-local coordinates.
+   */
+  hingePosition: readonly [number, number, number]
+  /** Rotation (radians) around `hingeAxis` when the hatch is fully closed. */
+  closedRotation: number
+  /** Rotation (radians) around `hingeAxis` when the hatch is fully open. */
+  openRotation: number
+  reversible: true
+  /** Semantic node-map IDs which together form the moving tailgate. */
+  movingNodeIds: readonly [
+    'trunk_outer_upper',
+    'trunk_outer_lip',
+    'trunk_inner_liner',
+    'trunk_spoiler_base',
+    'trunk_spoiler',
+    'trunk_spoiler_support',
+    'trunk_taillight_lens',
+    'trunk_taillight_housing',
+    'trunk_taillight_emitter',
+  ]
 }
 
 export const su7ConceptPack = {
@@ -54,7 +88,16 @@ export const su7ConceptPack = {
     window_passenger_front: 'XiaomicarGlass_front_2_Side_2_carGlass_front_2_Side_2_Car_glass',
     window_driver_rear: 'XiaomicarGlass_back_2_Side_2_carGlass_back_2_Side_2_Car_glass',
     window_passenger_rear: 'XiaomicarGlass_back_2_Side_1_carGlass_back_2_Side_1_Car_glass',
-    trunk: 'UNMAPPED_TRUNK_HATCH',
+    trunk: 'XiaomicarPaint_8_carPaint_8_pasted__lambert222_001',
+    trunk_outer_upper: 'XiaomicarPaint_8_carPaint_8_pasted__lambert222_001',
+    trunk_outer_lip: 'XiaomicarPaint_2_carPaint_2_pasted__lambert222_001',
+    trunk_inner_liner: 'XiaomicarPlastic_MatteBlack_trunk_7_carPlastic_MatteBlack_trunk_7_lambert225',
+    trunk_spoiler_base: 'XiaomicarSpoilers_carSpoilers_lambert229_001',
+    trunk_spoiler: 'spoiler',
+    trunk_spoiler_support: 'XiaomicarTailBracket_carTailBracket_Material_#49',
+    trunk_taillight_lens: 'XiaomicarLightGlass_Back_2_carLightGlass_Back_2_lambert210',
+    trunk_taillight_housing: 'XiaomicarLightPlastic_BrilliantBlack_2_carLightPlastic_BrilliantBlack_2_lambert230',
+    trunk_taillight_emitter: 'XiaomicarLight_bulb_2_carLight_bulb_2_blinn25',
     headlight_left: 'XiaomicarLightGlass_Front_carLightGlass_Front_Car_glass',
     headlight_right: 'XiaomicarLightGlass_Front_1__carLightGlass_Front_001_Car_glass',
     taillight_left: 'XiaomicarLightGlass_Back_1_carLightGlass_Back_1_lambert210',
@@ -142,14 +185,44 @@ export const su7ConceptPack = {
         descendOffset: [0, -0.46, 0] as const,
       },
     } satisfies WindowActionDefinition,
+    /**
+     * Real rear hatch assembled from body, liner, spoiler and centre-lamp parts.
+     * The original GLB already separates the required moving subassemblies.
+     * The Product Pack lists every exported node that must follow the hinge.
+     * The rear glass and outer lamp sections deliberately remain body-fixed.
+     */
+    hatch_rear: {
+      durationMs: 1650,
+      conflictGroup: 'rear',
+      hingeAxis: 'X',
+      /** GLB-local hinge at the front edge of the rear deck lid. */
+      hingePosition: [0, 0.01118, -0.01878] as const,
+      /** In GLB space the rear extends toward -Z; positive X rotation lifts it. */
+      closedRotation: 0,
+      /** Open pose ≈ 66° rotation rear-end up from the closed pose. */
+      openRotation: 1.15,
+      reversible: true,
+      movingNodeIds: [
+        'trunk_outer_upper',
+        'trunk_outer_lip',
+        'trunk_inner_liner',
+        'trunk_spoiler_base',
+        'trunk_spoiler',
+        'trunk_spoiler_support',
+        'trunk_taillight_lens',
+        'trunk_taillight_housing',
+        'trunk_taillight_emitter',
+      ] as const,
+    } satisfies HatchActionDefinition,
     trunk: {
       durationMs: 1200,
       conflictGroup: 'rear',
-      mode: 'fallback',
+      mode: 'real-mesh',
       fallbackCamera: 'rear_three_quarter',
       visualLift: 0.05,
       reversible: true,
-      note: 'The GLB Plastic_Trunk group only contains inner black trim, not a complete hatch assembly, so v0.1 uses the documented camera and body-lift fallback.',
+      /** Legacy action alias; the runtime forwards it to the real hatch rig. */
+      note: 'Legacy alias: runtime forwards trunk actions to the real multi-mesh rear hatch animation.',
     },
     lights_headlight: {
       durationMs: 420,

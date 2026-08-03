@@ -22,6 +22,15 @@ export type WindowAction = {
   progress: number
 }
 
+export type HatchTarget = 'rear_hatch'
+
+export type HatchAction = {
+  type: 'hatch'
+  target: HatchTarget
+  open: boolean
+  progress: number
+}
+
 export type TrunkAction = {
   type: 'trunk'
   open: boolean
@@ -33,13 +42,14 @@ export type LightsAction = {
   on: boolean
 }
 
-export type VehicleAction = OrbitAction | WindowAction | TrunkAction | LightsAction
+export type VehicleAction = OrbitAction | WindowAction | HatchAction | TrunkAction | LightsAction
 
 export type VehiclePartId =
   | 'window_driver_front'
   | 'window_passenger_front'
   | 'window_driver_rear'
   | 'window_passenger_rear'
+  | 'hatch_rear'
   | 'trunk'
 
 export type LightPartId = 'headlight' | 'taillight'

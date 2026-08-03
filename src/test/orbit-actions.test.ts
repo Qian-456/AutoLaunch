@@ -21,7 +21,7 @@ describe('registered VehicleAction pipeline', () => {
         ['window_passenger_rear', 'closed'],
         ['trunk', 'closed'],
       ]),
-      windowProgress: new Map<WindowTarget, number>([
+      windowProgress: new Map<Exclude<WindowTarget, 'all'>, number>([
         ['driver_front', 0],
         ['passenger_front', 0],
         ['driver_rear', 0],
@@ -164,13 +164,41 @@ describe('registered VehicleAction pipeline', () => {
     expect(useExperienceStore.getState().lastActionOutcome).toEqual({ id: result.actionId, status: 'completed' })
   })
 
-  it('uses the registered rear-camera fallback for the unmapped trunk hatch', () => {
+  it('routes trunk actions to the registered real multi-mesh hatch', () => {
     const result = dispatchVehicleAction({ type: 'trunk', open: true })
     expect(result.ok).toBe(true)
     expect(useExperienceStore.getState().activeOrbitPreset).toBe('rear_three_quarter')
-    expect(useExperienceStore.getState().notice).toContain('没有完整尾门节点')
-    expect(su7ConceptPack.nodeMap.trunk).toBe('UNMAPPED_TRUNK_HATCH')
-    expect(su7ConceptPack.actions.trunk.mode).toBe('fallback')
+    expect(su7ConceptPack.nodeMap.trunk).toBe(su7ConceptPack.nodeMap.trunk_outer_upper)
+    expect(su7ConceptPack.actions.hatch_rear.movingNodeIds).toEqual([
+      'trunk_outer_upper',
+      'trunk_outer_lip',
+      'trunk_inner_liner',
+      'trunk_spoiler_base',
+      'trunk_spoiler',
+      'trunk_spoiler_support',
+      'trunk_taillight_lens',
+      'trunk_taillight_housing',
+      'trunk_taillight_emitter',
+    ])
+    expect(su7ConceptPack.nodeMap.trunk_taillight_lens).toBe(su7ConceptPack.nodeMap.taillight_right)
+    expect(su7ConceptPack.actions.hatch_rear.movingNodeIds).not.toContain('taillight_left')
+    expect(su7ConceptPack.actions.trunk.mode).toBe('real-mesh')
+  })
+
+  it('reverses the real hatch smoothly through the rear conflict group', () => {
+    const opening = dispatchVehicleAction({ type: 'trunk', open: true })
+    if (!opening.ok || !opening.actionId) throw new Error('expected opening action id')
+    const closing = dispatchVehicleAction({ type: 'trunk', open: false })
+    if (!closing.ok || !closing.actionId) throw new Error('expected closing action id')
+
+    const activeActions = useExperienceStore.getState().activeActions
+    expect(activeActions.size).toBe(1)
+    expect(activeActions.has(opening.actionId)).toBe(false)
+    expect(activeActions.get(closing.actionId)?.targetValue).toBe(false)
+    expect(useExperienceStore.getState().lastActionOutcome).toEqual({
+      id: opening.actionId,
+      status: 'cancelled',
+    })
   })
 
   it('product pack contains all four window definitions', () => {

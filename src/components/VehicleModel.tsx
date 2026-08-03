@@ -3,7 +3,13 @@ import { useGLTF } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { BoxGeometry, Color, Group, MathUtils, Mesh, MeshStandardMaterial, Object3D } from 'three'
 import { SkeletonUtils } from 'three/examples/jsm/Addons.js'
-import { WINDOW_TARGETS, WINDOW_LABELS, su7ConceptPack, type WindowActionDefinition } from '../pack/su7-concept.pack'
+import {
+  HatchActionDefinition,
+  WINDOW_TARGETS,
+  WINDOW_LABELS,
+  su7ConceptPack,
+  type WindowActionDefinition,
+} from '../pack/su7-concept.pack'
 import { useExperienceStore } from '../store/experience-store'
 import type { ActiveVehicleAction, WindowTarget } from '../types'
 import { VehicleLightEffects } from './VehicleLightEffects'
@@ -36,6 +42,17 @@ type WindowAnimation = {
   toOpacity?: number
 }
 
+type HatchAnimation = {
+  kind: 'hatch'
+  execution: ActiveVehicleAction
+  /** GLB-local pivot; we write rotation.x per frame. */
+  pivot: Group
+  definition: HatchActionDefinition
+  fromRotation: number
+  toRotation: number
+  startedAt: number
+}
+
 type TrunkAnimation = {
   kind: 'trunk'
   execution: ActiveVehicleAction
@@ -64,25 +81,24 @@ type FallbackAnimation = {
   startedAt: number
 }
 
-type RuntimeAnimation = WindowAnimation | TrunkAnimation | LightAnimation | FallbackAnimation
+type RuntimeAnimation = WindowAnimation | HatchAnimation | TrunkAnimation | LightAnimation | FallbackAnimation
 
 type WindowNodeRefs = {
-  /**
-   * For each physical window we keep either the real GLB Object3D or a
-   * freshly-created placeholder Mesh + Group. Either way the returned object
-   * supports .position translation on its declared axis so the rest of the
-   * runtime can treat them uniformly.
-   */
   object: Object3D
-  /**
-   * The closed (0%) reference position for the translation axis recorded at
-   * scene load. Stored per-axis so we can rebuild the absolute vector cleanly.
-   */
   closedPosition: { x: number; y: number; z: number }
-  /** True when the object is a virtual placeholder (no matching GLB node). */
   isVirtual: boolean
-  /** Materials attached to the object; used for the subtle opacity fade. */
   materials: MeshStandardMaterial[]
+}
+
+type HatchNodeRefs = {
+  /** GLB-local pivot at the physical hinge line. */
+  pivot: Group
+  /** Exported GLB nodes attached to the pivot while preserving their pose. */
+  movingNodes: Object3D[]
+  /** Hatch-specific action definition cached for per-frame lerp math. */
+  definition: HatchActionDefinition
+  /** Optional cached rotation at the closed pose (used for timeouts/rollback). */
+  closedRotation: number
 }
 
 function collectStandardMaterials(root: Object3D | null | undefined) {
@@ -204,12 +220,41 @@ function applyVirtualWindowPosition(
   )
 }
 
+/**
+ * Assemble the real exported tailgate parts under one GLB-local hinge pivot.
+ * Object3D.attach() preserves each part's baked transform, so the closed pose
+ * remains unchanged while one pivot drives the outer skin and inner liner.
+ */
+function buildHatchRefs(scene: Object3D): HatchNodeRefs | null {
+  const definition = su7ConceptPack.actions.hatch_rear as HatchActionDefinition
+  const movingNodes = definition.movingNodeIds
+    .map((semanticId) => scene.getObjectByName(su7ConceptPack.nodeMap[semanticId]))
+    .filter((node): node is Object3D => Boolean(node))
+  if (movingNodes.length !== definition.movingNodeIds.length) return null
+
+  const pivot = new Group()
+  pivot.name = 'Hatch_Pivot_rear_hatch'
+  pivot.position.set(...definition.hingePosition)
+  pivot.rotation.x = definition.closedRotation
+  scene.add(pivot)
+  scene.updateMatrixWorld(true)
+  movingNodes.forEach((node) => pivot.attach(node))
+
+  return {
+    pivot,
+    movingNodes,
+    definition,
+    closedRotation: definition.closedRotation,
+  }
+}
+
 export function VehicleModel() {
   const gltf = useGLTF(su7ConceptPack.model.path)
   const renderer = useThree((state) => state.gl)
   const scene = useMemo(() => SkeletonUtils.clone(gltf.scene), [gltf.scene])
   const vehicleRoot = useRef<Group>(null)
   const windowRefs = useRef<Record<Exclude<WindowTarget, 'all'>, WindowNodeRefs> | null>(null)
+  const hatchRefs = useRef<HatchNodeRefs | null>(null)
   const vehicleClosedY = useRef(0)
   const runtimeAnimations = useRef(new Map<string, RuntimeAnimation>())
   const activeActions = useExperienceStore((state) => state.activeActions)
@@ -217,6 +262,7 @@ export function VehicleModel() {
   const setNotice = useExperienceStore((state) => state.setNotice)
   const requestOrbit = useExperienceStore((state) => state.requestOrbit)
   const finishAction = useExperienceStore((state) => state.finishAction)
+
 
   useEffect(() => {
     const missingNodes = Object.entries(su7ConceptPack.nodeMap)
@@ -292,8 +338,10 @@ export function VehicleModel() {
 
     if (vehicleRoot.current) {
       windowRefs.current = buildWindowRefs(scene, vehicleRoot.current)
+      hatchRefs.current = buildHatchRefs(scene)
       vehicleClosedY.current = vehicleRoot.current.position.y
       ;(globalThis as unknown as { __AUDIT_WINDOW_REFS__: typeof windowRefs.current }).__AUDIT_WINDOW_REFS__ = windowRefs.current
+      ;(globalThis as unknown as { __AUDIT_HATCH_REFS__: HatchNodeRefs | null }).__AUDIT_HATCH_REFS__ = hatchRefs.current
     }
     setModelStatus('ready')
   }, [renderer, scene, setModelStatus, setNotice])
@@ -335,6 +383,40 @@ export function VehicleModel() {
           materials,
           fromOpacity: materials[0]?.opacity ?? 1,
           toOpacity: 1 - (progressTo / 100) * 0.6,
+        })
+        continue
+      }
+
+      if (execution.action.type === 'hatch') {
+        const refs = hatchRefs.current
+        if (!refs) {
+          requestOrbit(su7ConceptPack.actions.trunk.fallbackCamera)
+          setNotice('当前模型的真实尾门组合节点不完整，已用车尾镜头与轻微抬升降级展示。')
+          const root = vehicleRoot.current
+          if (root) {
+            runtimeAnimations.current.set(execution.id, {
+              kind: 'trunk',
+              execution,
+              object: root,
+              from: root.position.y,
+              to: vehicleClosedY.current + (execution.targetValue ? su7ConceptPack.actions.trunk.visualLift : 0),
+              startedAt,
+            })
+          } else {
+            runtimeAnimations.current.set(execution.id, { kind: 'fallback', execution, startedAt })
+          }
+          continue
+        }
+        const def = refs.definition
+        const opening = execution.targetValue
+        runtimeAnimations.current.set(execution.id, {
+          kind: 'hatch',
+          execution,
+          pivot: refs.pivot,
+          definition: def,
+          fromRotation: refs.pivot.rotation.x,
+          toRotation: opening ? def.openRotation : def.closedRotation,
+          startedAt,
         })
         continue
       }
@@ -408,6 +490,8 @@ export function VehicleModel() {
           if (animation.materials && animation.fromOpacity !== undefined) {
             animation.materials.forEach((material) => { material.opacity = animation.fromOpacity! })
           }
+        } else if (animation.kind === 'hatch') {
+          animation.pivot.rotation.x = animation.fromRotation
         } else if (animation.kind === 'trunk') {
           animation.object.position.y = animation.from
         } else if (animation.kind === 'lights') {
@@ -447,6 +531,9 @@ export function VehicleModel() {
             material.needsUpdate = true
           })
         }
+      } else if (animation.kind === 'hatch') {
+        const rot = MathUtils.lerp(animation.fromRotation, animation.toRotation, eased)
+        animation.pivot.rotation.x = rot
       } else if (animation.kind === 'trunk') {
         animation.object.position.y = MathUtils.lerp(animation.from, animation.to, eased)
       } else if (animation.kind === 'lights') {

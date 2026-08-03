@@ -1,6 +1,17 @@
-import { WINDOW_LABELS, WINDOW_TARGETS, su7ConceptPack, type WindowActionDefinition } from '../pack/su7-concept.pack'
+import {
+  HatchActionDefinition,
+  WINDOW_LABELS,
+  WINDOW_TARGETS,
+  su7ConceptPack,
+  type WindowActionDefinition,
+} from '../pack/su7-concept.pack'
 import { useExperienceStore } from '../store/experience-store'
-import type { ActiveVehicleAction, VehicleAction, WindowTarget } from '../types'
+import type {
+  ActiveVehicleAction,
+  HatchTarget,
+  VehicleAction,
+  WindowTarget,
+} from '../types'
 
 export type DispatchResult =
   | { ok: true; message: string; actionId?: string }
@@ -9,12 +20,14 @@ export type DispatchResult =
 let nextActionId = 1
 
 /**
- * For non-window actions (trunk / lights) the boolean target is the single source.
- * For window actions we expose `progress` first, then derive `targetValue` as
- * progress > 0 so the existing open/close conflict checks still work.
+ * For non-window actions (hatch / trunk / lights) the boolean target is the
+ * single source. For window actions we expose `progress` first, then derive
+ * `targetValue` as progress > 0 so the existing open/close conflict checks
+ * still work.
  */
 function targetValueOf(action: Exclude<VehicleAction, { type: 'orbit' }>): boolean {
   if (action.type === 'window') return action.progress > 0
+  if (action.type === 'hatch') return action.open
   if (action.type === 'trunk') return action.open
   return action.on
 }
@@ -30,7 +43,12 @@ function currentValueOf(action: Exclude<VehicleAction, { type: 'orbit' }>): bool
     const target = action.target as Exclude<WindowTarget, 'all'>
     return (state.windowProgress.get(target) ?? 0) > 0
   }
-  if (action.type === 'trunk') return state.vehiclePartStates.get('trunk') === 'open'
+  if (action.type === 'hatch') {
+    return state.vehiclePartStates.get('hatch_rear') === 'open'
+  }
+  if (action.type === 'trunk') {
+    return state.vehiclePartStates.get('trunk') === 'open'
+  }
   return state.lightStates.get(action.target) ?? false
 }
 
@@ -46,6 +64,9 @@ function conflictGroupOf(action: Exclude<VehicleAction, { type: 'orbit' }>): str
     ] as WindowActionDefinition | undefined
     return definition?.conflictGroup ?? 'windows'
   }
+  if (action.type === 'hatch') {
+    return (su7ConceptPack.actions.hatch_rear as HatchActionDefinition).conflictGroup
+  }
   if (action.type === 'trunk') return su7ConceptPack.actions.trunk.conflictGroup
   return action.target === 'headlight'
     ? su7ConceptPack.actions.lights_headlight.conflictGroup
@@ -60,7 +81,16 @@ function durationOf(action: Exclude<VehicleAction, { type: 'orbit' }>): number {
     ] as WindowActionDefinition | undefined
     return definition?.durationMs ?? 800
   }
-  if (action.type === 'trunk') return su7ConceptPack.actions.trunk.durationMs
+  if (action.type === 'hatch') {
+    return (su7ConceptPack.actions.hatch_rear as HatchActionDefinition).durationMs
+  }
+  if (action.type === 'trunk') {
+    // Prefer the real hatch duration when forwarding so the visible animation
+    // and the timeout window stay in sync; fall back to the legacy trunk
+    // duration as a safety net.
+    return (su7ConceptPack.actions.hatch_rear as HatchActionDefinition | undefined)?.durationMs
+      ?? su7ConceptPack.actions.trunk.durationMs
+  }
   return action.target === 'headlight'
     ? su7ConceptPack.actions.lights_headlight.durationMs
     : su7ConceptPack.actions.lights_taillight.durationMs
@@ -73,6 +103,7 @@ function labelOf(action: Exclude<VehicleAction, { type: 'orbit' }>): string {
       : WINDOW_LABELS[action.target as Exclude<WindowTarget, 'all'>]
     return `${targetLabel} ${action.progress > 0 ? `开启至 ${action.progress}%` : '关闭至 0%'}`
   }
+  if (action.type === 'hatch') return `后备箱${action.open ? '打开' : '关闭'}`
   if (action.type === 'trunk') return `后备箱${action.open ? '打开' : '关闭'}`
   return `${action.target === 'headlight' ? '大灯' : '尾灯'}${action.on ? '开启' : '关闭'}`
 }
@@ -132,9 +163,9 @@ function dispatchSingle(action: Exclude<VehicleAction, { type: 'orbit' }>): Disp
   const execution = buildExecution(action)
   state.startAction(execution)
 
-  if (action.type === 'trunk' && su7ConceptPack.actions.trunk.mode === 'fallback') {
-    useExperienceStore.getState().requestOrbit(su7ConceptPack.actions.trunk.fallbackCamera)
-    useExperienceStore.getState().setNotice('当前模型没有完整尾门节点，已用车尾镜头与轻微抬升代替。')
+  if (action.type === 'trunk' || action.type === 'hatch') {
+    // Move to the registered rear camera so the real tailgate motion remains visible.
+    useExperienceStore.getState().requestOrbit('rear_three_quarter')
   }
 
   return { ok: true, message: `${labelOf(action)}：动作已开始`, actionId: execution.id }
@@ -175,6 +206,17 @@ export function dispatchVehicleAction(action: VehicleAction): DispatchResult {
       progress: Math.max(0, Math.min(100, Math.round(action.progress))),
     }
     return dispatchSingle(normalized)
+  }
+
+  // Legacy trunk alias → normalized hatch action.
+  if (action.type === 'trunk') {
+    const hatchTarget: HatchTarget = 'rear_hatch'
+    return dispatchSingle({
+      type: 'hatch',
+      target: hatchTarget,
+      open: action.open,
+      progress: action.open ? 100 : 0,
+    })
   }
 
   return dispatchSingle(action)
