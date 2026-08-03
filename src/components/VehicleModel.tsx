@@ -3,6 +3,7 @@ import { useGLTF } from '@react-three/drei'
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { Box3, BoxGeometry, Color, Group, MathUtils, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, Vector3 } from 'three'
 import { SkeletonUtils } from 'three/examples/jsm/Addons.js'
+import { KTX2Loader, type GLTFLoader } from 'three-stdlib'
 import {
   HatchActionDefinition,
   WINDOW_TARGETS,
@@ -323,8 +324,14 @@ function buildHatchRefs(scene: Object3D): HatchNodeRefs | null {
 }
 
 export function VehicleModel() {
-  const gltf = useGLTF(su7ConceptPack.model.path)
   const renderer = useThree((state) => state.gl)
+  const configureLoader = useCallback((loader: GLTFLoader) => {
+    const ktx2Loader = new KTX2Loader()
+      .setTranscoderPath('/basis/')
+      .detectSupport(renderer)
+    loader.setKTX2Loader(ktx2Loader)
+  }, [renderer])
+  const gltf = useGLTF(su7ConceptPack.model.path, true, true, configureLoader)
   const scene = useMemo(() => SkeletonUtils.clone(gltf.scene), [gltf.scene])
   const vehicleRoot = useRef<Group>(null)
   const windowRefs = useRef<Record<Exclude<WindowTarget, 'all'>, WindowNodeRefs> | null>(null)
@@ -391,16 +398,27 @@ export function VehicleModel() {
       .map(([semanticId]) => semanticId)
     console.info('[AutoLaunch] GLB nodes:', scene.children.map((node) => node.name))
     if (missingNodes.length) {
-      console.warn('[AutoLaunch] missing node-map entries:', missingNodes)
-      setNotice('⚠ 当前演示模型部分动作节点暂未映射，已用虚拟窗户形态代替真实动画。')
+      console.warn(`[AutoLaunch] missing node-map entries: ${JSON.stringify(missingNodes)}`)
+      const actionNodeMissing = missingNodes.some((id) => (
+        id.startsWith('window_')
+        || id.startsWith('trunk_')
+        || id.startsWith('headlight_')
+        || id.startsWith('taillight_')
+      ))
+      setNotice(actionNodeMissing
+        ? '⚠ 当前演示模型部分动作节点暂未映射，相关动作将使用降级展示。'
+        : '⚠ 当前模型部分外观节点暂未映射，已跳过对应材质覆盖；核心动作仍可使用。')
     }
     scene.traverse((object) => {
-      object.castShadow = true
-      object.receiveShadow = true
+      object.castShadow = false
+      object.receiveShadow = false
       if (su7ConceptPack.appearance.hiddenNodes.includes(object.name as never)) object.visible = false
       const mesh = object as Mesh
       if (!mesh.isMesh) return
       const sourceMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+      const materialNames = sourceMaterials.map((material) => material.name)
+      mesh.castShadow = materialNames.some((name) => su7ConceptPack.appearance.shadowCasterMaterials.includes(name as never))
+      mesh.receiveShadow = materialNames.some((name) => su7ConceptPack.appearance.shadowReceiverMaterials.includes(name as never))
       const clonedMaterials = sourceMaterials.map((source) => {
         const material = source.clone() as MeshStandardMaterial
         const maximumAnisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy())
@@ -713,5 +731,3 @@ export function VehicleModel() {
     </group>
   )
 }
-
-useGLTF.preload(su7ConceptPack.model.path)

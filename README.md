@@ -205,6 +205,10 @@ AutoLaunch/
 - 顶栏“发布会模式”可切换带发光双环、金属展台和顶部舞台光的发布会展位，不改变车辆动作状态。
 - `index.html` 在应用脚本执行前预加载 `su7_ultra.glb`，`useGLTF` 继续复用缓存；加载界面显示 LoadingManager 实际进度，模型材质初始化完成后才进入 `3D READY`。
 - `ContactShadows` 只计算初始有限帧，减少模型就绪后的持续 GPU 负担。
+- 发布模型使用 KTX2 与 Meshopt；普通纹理上限为 2048。为保留车侧银条与 `Ultra` 字样的原始清晰度，唯一承载该涂装的 4096 车漆贴图保留原始 PNG，其余 31 张继续压缩。GLB 从 32.3 MB 降至约 13.0 MB，32 张纹理的估算 GPU 占用由约 250 MB（RGBA + mipmap）降至约 120 MB（约 114.5 MiB）。
+- Canvas 像素比限制为 `1–1.5`；主阴影贴图为 1024，只有 Product Pack 中声明的车身、车轮、尾门等主要材质参与阴影。
+- `public/basis/` 保存 Three.js KTX2 转码器；更换 Three.js 版本时必须同步更新这两个文件，并重新执行浏览器视觉验收。
+- 可运行 `npm run measure:glb` 查看发布模型、纹理尺寸和估算运行时占用；`scripts/compare-glb-structure.mjs` 用于确认压缩前后节点顺序、层级与动作组变换未改变。
 
 ## 当前 3D 展示、语音与 VehicleAction 验收
 
@@ -234,7 +238,7 @@ FBX 源文件对照记录：`2025-xiaomi-su7-ultra/source/FINAL_MODEL_SU7U/FINAL
 
 二次定位确认残留细线来自车尾 `carLightPlastic_BrilliantBlack_2 / Plastic_Light` 外壳，而非位于车头的 `Light_Chroaming` 镀铬节点。该尾灯外壳现已关闭环境反射并清除颜色、法线、粗糙度、金属度与 AO 贴图；左右尾灯玻璃的环境反射也降至接近零，以消除侧后视角下的银青色接缝。
 
-边缘瑕疵校正：FBX/GLB 材质表显示 `Brilliant_Black`、`BrilliantGray` 与 `Brilliant_Silver` 共享亮色贴图，且原 `Brilliant_Silver` 带异常发光因子。Pack 会清除这些贴图和发光，将前后唇、窗框及侧裙统一为低金属度深黑材质；`Roof`、`Roof_Glass`、`Windows` 同样去除白色源贴图。Canvas 使用 1.5–2 倍像素比和最高 8 倍各向异性过滤，并降低展示灯光强度以减少边缘锯齿、摩尔纹与过曝白边。
+边缘瑕疵校正：FBX/GLB 材质表显示 `Brilliant_Black`、`BrilliantGray` 与 `Brilliant_Silver` 共享亮色贴图，且原 `Brilliant_Silver` 带异常发光因子。Pack 会清除这些贴图和发光，将前后唇、窗框及侧裙统一为低金属度深黑材质；`Roof`、`Roof_Glass`、`Windows` 同样去除白色源贴图。Canvas 使用 1–1.5 倍像素比和最高 8 倍各向异性过滤，并降低展示灯光强度以减少边缘锯齿、摩尔纹与过曝白边。
 
 ## FastAPI 一键部署
 

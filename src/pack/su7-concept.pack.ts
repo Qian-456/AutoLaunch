@@ -287,6 +287,9 @@ export const su7ConceptPack = {
     },
   },
   appearance: {
+    /** Only visually dominant exterior materials participate in shadow maps. */
+    shadowCasterMaterials: ['CarPaint', 'Roof', 'tire', 'RIM_1', 'Color_rim'],
+    shadowReceiverMaterials: ['CarPaint', 'Roof', 'tire'],
     hiddenNodes: [
       'XiaomicarPlate_carPlate_aaa_Details_0',
       'Xiaomiempennage_img_empennage_img_lambert46_Details_0',

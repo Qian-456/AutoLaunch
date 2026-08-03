@@ -11,6 +11,16 @@ const document = JSON.parse(buffer.subarray(20, 20 + jsonLength).toString('utf8'
 const box = new Box3().makeEmpty()
 const corners = Array.from({ length: 8 }, () => new Vector3())
 const nodeBounds = []
+const normalizeAccessorValue = (value, accessor) => {
+  if (!accessor.normalized) return value
+  switch (accessor.componentType) {
+    case 5120: return Math.max(value / 127, -1) // BYTE
+    case 5121: return value / 255 // UNSIGNED_BYTE
+    case 5122: return Math.max(value / 32767, -1) // SHORT
+    case 5123: return value / 65535 // UNSIGNED_SHORT
+    default: return value
+  }
+}
 const visit = (nodeIndex, parentMatrix) => {
   const node = document.nodes[nodeIndex]
   const local = node.matrix
@@ -27,9 +37,9 @@ const visit = (nodeIndex, parentMatrix) => {
       const accessor = document.accessors[primitive.attributes.POSITION]
       if (!accessor?.min || !accessor?.max) continue
       let cursor = 0
-      for (const x of [accessor.min[0], accessor.max[0]]) {
-        for (const y of [accessor.min[1], accessor.max[1]]) {
-          for (const z of [accessor.min[2], accessor.max[2]]) {
+      for (const x of [accessor.min[0], accessor.max[0]].map((value) => normalizeAccessorValue(value, accessor))) {
+        for (const y of [accessor.min[1], accessor.max[1]].map((value) => normalizeAccessorValue(value, accessor))) {
+          for (const z of [accessor.min[2], accessor.max[2]].map((value) => normalizeAccessorValue(value, accessor))) {
             corners[cursor++].set(x, y, z).applyMatrix4(world)
           }
         }

@@ -37,7 +37,7 @@ export function Experience() {
         position={[4, 8, 6]}
         intensity={2.35}
         color="#fff8e8"
-        shadow-mapSize={[2048, 2048]}
+        shadow-mapSize={[1024, 1024]}
       />
       <directionalLight position={[-5, 3, -4]} intensity={1.35} color="#91b9ff" />
       <spotLight position={[0, 6, -5]} intensity={3.2} angle={0.55} penumbra={0.8} color="#ffd15c" />

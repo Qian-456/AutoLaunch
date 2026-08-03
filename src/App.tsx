@@ -264,7 +264,7 @@ export function App() {
         <SceneErrorBoundary>
           <Canvas
             shadows
-            dpr={[1.5, 2]}
+            dpr={[1, 1.5]}
             camera={{ position: [-6.25, 2.25, 4.6], fov: 32, near: 0.1, far: 100 }}
             gl={{
               antialias: true,
