@@ -41,8 +41,8 @@ type WindowAnimation = {
   closedBase: readonly [number, number, number]
   startedAt: number
   materials?: MeshStandardMaterial[]
-  fromOpacity?: number
-  toOpacity?: number
+  /** Opacity at the fully closed pose, before the glass enters the door shell. */
+  closedOpacity: number
 }
 
 type HatchAnimation = {
@@ -91,6 +91,7 @@ type WindowNodeRefs = {
   closedPosition: { x: number; y: number; z: number }
   isVirtual: boolean
   materials: MeshStandardMaterial[]
+  closedOpacity: number
 }
 
 type HatchNodeRefs = {
@@ -116,6 +117,17 @@ function collectStandardMaterials(root: Object3D | null | undefined) {
     }
   })
   return materials
+}
+
+/**
+ * Keep the glass visually solid while it is above the belt line, then conceal
+ * it as it enters the opaque door shell. A fully opened window must have no
+ * translucent edge left visible from oblique side views.
+ */
+export function windowOpacityForProgress(progressPercent: number, closedOpacity = 1) {
+  const progress = MathUtils.clamp(progressPercent, 0, 100)
+  const concealedByDoor = MathUtils.smoothstep(progress, 68, 100)
+  return closedOpacity * (1 - concealedByDoor)
 }
 
 /**
@@ -186,6 +198,7 @@ function buildWindowRefs(
       },
       isVirtual,
       materials,
+      closedOpacity: materials[0]?.opacity ?? 1,
     }
   }
   return out
@@ -522,6 +535,7 @@ export function VehicleModel() {
         const progressFrom = Math.max(0, Math.min(100, execution.startProgress ?? 0))
         const progressTo = Math.max(0, Math.min(100, execution.targetProgress ?? (execution.targetValue ? 100 : 0)))
         const materials = refs.materials
+        refs.object.visible = true
         runtimeAnimations.current.set(execution.id, {
           kind: 'window',
           execution,
@@ -534,8 +548,7 @@ export function VehicleModel() {
           closedBase: [refs.closedPosition.x, refs.closedPosition.y, refs.closedPosition.z] as const,
           startedAt,
           materials,
-          fromOpacity: materials[0]?.opacity ?? 1,
-          toOpacity: 1 - (progressTo / 100) * 0.6,
+          closedOpacity: refs.closedOpacity,
         })
         continue
       }
@@ -640,9 +653,9 @@ export function VehicleModel() {
             const axis = definition.axis.toLowerCase() as 'x' | 'y' | 'z'
             object.position[axis] = axisPositionForProgress(closedBase[axis === 'x' ? 0 : axis === 'y' ? 1 : 2], definition, 0)
           }
-          if (animation.materials && animation.fromOpacity !== undefined) {
-            animation.materials.forEach((material) => { material.opacity = animation.fromOpacity! })
-          }
+          const restoredOpacity = windowOpacityForProgress(animation.progressFrom, animation.closedOpacity)
+          animation.materials?.forEach((material) => { material.opacity = restoredOpacity })
+          animation.object.visible = restoredOpacity > 0.001
         } else if (animation.kind === 'hatch') {
           animation.pivot.rotation.x = animation.fromRotation
         } else if (animation.kind === 'trunk') {
@@ -659,7 +672,8 @@ export function VehicleModel() {
       const progress = Math.min(1, (now - animation.startedAt) / execution.durationMs)
       const eased = MathUtils.smoothstep(progress, 0, 1)
       if (animation.kind === 'window') {
-        const normalizedProgress = MathUtils.lerp(animation.progressFrom, animation.progressTo, eased) / 100
+        const progressPercent = MathUtils.lerp(animation.progressFrom, animation.progressTo, eased)
+        const normalizedProgress = progressPercent / 100
         const axis = animation.definition.axis.toLowerCase() as 'x' | 'y' | 'z'
         if (animation.isVirtual) {
           applyVirtualWindowPosition(
@@ -672,18 +686,15 @@ export function VehicleModel() {
           const baseValue = animation.closedBase[axis === 'x' ? 0 : axis === 'y' ? 1 : 2]
           animation.object.position[axis] = axisPositionForProgress(baseValue, animation.definition, normalizedProgress)
         }
-        if (
-          animation.materials
-          && animation.fromOpacity !== undefined
-          && animation.toOpacity !== undefined
-        ) {
-          const opacity = MathUtils.lerp(animation.fromOpacity, animation.toOpacity, eased)
+        const opacity = windowOpacityForProgress(progressPercent, animation.closedOpacity)
+        if (animation.materials) {
           animation.materials.forEach((material) => {
             material.transparent = true
             material.opacity = opacity
             material.needsUpdate = true
           })
         }
+        animation.object.visible = opacity > 0.001
       } else if (animation.kind === 'hatch') {
         const rot = MathUtils.lerp(animation.fromRotation, animation.toRotation, eased)
         animation.pivot.rotation.x = rot

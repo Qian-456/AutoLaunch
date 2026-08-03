@@ -230,7 +230,7 @@ FBX 源文件对照记录：`2025-xiaomi-su7-ultra/source/FINAL_MODEL_SU7U/FINAL
 
 银色饰条节点仍分别注册为 `trim_front_silver`、`trim_side_silver`、`trim_rear_silver` 和 `trim_rear_silver_center`，用于车型语义映射和独立材质微调；它们不是运行时生成的 Mesh。轮内刹车盘使用石墨黑节点覆盖，卡钳使用黄色覆盖。
 
-尾部车身徽标 `xiaomi`、中文“小米”和车型字样由独立 `carXiaoMi_1` 节点承载，Product Pack 将其注册为 `rear_badges` 并覆盖为低金属度黑色。React 创建的前后车牌不属于该节点，因此车牌文字颜色不受影响。
+尾部车身徽标 `xiaomi`、中文“小米”和车型字样由独立 `carXiaoMi_1` 节点承载，Product Pack 将其注册为 `rear_badges`，并纳入尾门铰链的移动节点集合，打开尾门时会与外板同步旋转，不再留在车身原位。React 创建的前后车牌不属于该节点，因此车牌文字颜色不受影响。车窗完全打开后，真实玻璃 Mesh 会在降入门板的末段逐渐隐去并停止渲染，关闭时重新显示，避免从侧面看到门板内的玻璃边缘。
 
 左右后视镜的上壳、下壳与镜面组件分别注册为六个 `mirror_*` 语义节点。上下壳使用低金属度纯黑材质，镜面使用带轻微反射的深黑材质，避免共享 `CarPaint` 和 `CHROME_Logo` 令后视镜出现黄色或银白色。
 

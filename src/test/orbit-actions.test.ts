@@ -6,6 +6,24 @@ import { su7ConceptPack } from '../pack/su7-concept.pack'
 import type { WindowTarget } from '../types'
 import { Object3D } from 'three'
 import { resolveVehicleTargetFromHit, resolveWindowTargetFromHit } from '../runtime/window-hit-target'
+import { windowOpacityForProgress } from '../components/VehicleModel'
+
+describe('window glass concealment', () => {
+  it('keeps the glass opaque above the door and fully hides it when open', () => {
+    expect(windowOpacityForProgress(0, 0.72)).toBeCloseTo(0.72)
+    expect(windowOpacityForProgress(68, 0.72)).toBeCloseTo(0.72)
+    expect(windowOpacityForProgress(84, 0.72)).toBeGreaterThan(0)
+    expect(windowOpacityForProgress(84, 0.72)).toBeLessThan(0.72)
+    expect(windowOpacityForProgress(100, 0.72)).toBe(0)
+  })
+})
+
+describe('rear hatch moving assembly', () => {
+  it('keeps the rear badges attached to the opening hatch', () => {
+    expect(su7ConceptPack.actions.hatch_rear.movingNodeIds).toContain('rear_badges')
+    expect(su7ConceptPack.nodeMap.rear_badges).toBeTruthy()
+  })
+})
 
 describe('registered VehicleAction pipeline', () => {
   beforeEach(() => {
@@ -176,6 +194,7 @@ describe('registered VehicleAction pipeline', () => {
       'trunk_outer_upper',
       'trunk_outer_lip',
       'trunk_inner_liner',
+      'rear_badges',
       'trunk_spoiler_base',
       'trunk_spoiler',
       'trunk_spoiler_support',
