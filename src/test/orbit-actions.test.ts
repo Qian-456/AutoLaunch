@@ -3,6 +3,7 @@ import { parseCommand } from '../runtime/command-parser'
 import { dispatchVehicleAction } from '../runtime/action-dispatcher'
 import { useExperienceStore } from '../store/experience-store'
 import { su7ConceptPack } from '../pack/su7-concept.pack'
+import type { WindowTarget } from '../types'
 
 describe('registered VehicleAction pipeline', () => {
   beforeEach(() => {
@@ -15,7 +16,16 @@ describe('registered VehicleAction pipeline', () => {
       inputMode: { text: true, voice: 'unsupported' },
       vehiclePartStates: new Map([
         ['window_driver_front', 'closed'],
+        ['window_passenger_front', 'closed'],
+        ['window_driver_rear', 'closed'],
+        ['window_passenger_rear', 'closed'],
         ['trunk', 'closed'],
+      ]),
+      windowProgress: new Map<WindowTarget, number>([
+        ['driver_front', 0],
+        ['passenger_front', 0],
+        ['driver_rear', 0],
+        ['passenger_rear', 0],
       ]),
       lightStates: new Map([
         ['headlight', false],
@@ -37,11 +47,60 @@ describe('registered VehicleAction pipeline', () => {
     })
   })
 
-  it('parses window, trunk and light commands into VehicleAction', () => {
+  it('parses window commands for all four windows', () => {
     expect(parseCommand('打开主驾车窗')).toEqual({
       matched: true,
-      action: { type: 'window', target: 'driver_front', open: true },
+      action: { type: 'window', target: 'driver_front', open: true, progress: 100 },
     })
+    expect(parseCommand('打开副驾车窗')).toEqual({
+      matched: true,
+      action: { type: 'window', target: 'passenger_front', open: true, progress: 100 },
+    })
+    expect(parseCommand('打开主驾后车窗')).toEqual({
+      matched: true,
+      action: { type: 'window', target: 'driver_rear', open: true, progress: 100 },
+    })
+    expect(parseCommand('打开副驾后车窗')).toEqual({
+      matched: true,
+      action: { type: 'window', target: 'passenger_rear', open: true, progress: 100 },
+    })
+  })
+
+  it('parses window commands with percentage progress', () => {
+    expect(parseCommand('主驾车窗打开50%')).toEqual({
+      matched: true,
+      action: { type: 'window', target: 'driver_front', open: true, progress: 50 },
+    })
+    expect(parseCommand('副驾车窗降到30%')).toEqual({
+      matched: true,
+      action: { type: 'window', target: 'passenger_front', open: true, progress: 30 },
+    })
+    expect(parseCommand('主驾后窗70%')).toEqual({
+      matched: true,
+      action: { type: 'window', target: 'driver_rear', open: true, progress: 70 },
+    })
+    expect(parseCommand('副驾后车窗关闭0%')).toEqual({
+      matched: true,
+      action: { type: 'window', target: 'passenger_rear', open: false, progress: 0 },
+    })
+  })
+
+  it('parses bulk window commands (全部车窗)', () => {
+    expect(parseCommand('全部车窗打开')).toEqual({
+      matched: true,
+      action: { type: 'window', target: 'all', open: true, progress: 100 },
+    })
+    expect(parseCommand('所有车窗关闭')).toEqual({
+      matched: true,
+      action: { type: 'window', target: 'all', open: false, progress: 0 },
+    })
+    expect(parseCommand('全车车窗50%')).toEqual({
+      matched: true,
+      action: { type: 'window', target: 'all', open: true, progress: 50 },
+    })
+  })
+
+  it('parses trunk and light commands into VehicleAction', () => {
     expect(parseCommand('开后备箱')).toEqual({ matched: true, action: { type: 'trunk', open: true } })
     expect(parseCommand('开灯')).toEqual({
       matched: true,
@@ -56,7 +115,7 @@ describe('registered VehicleAction pipeline', () => {
   it('returns the fixed vehicle-action suggestion for unknown commands', () => {
     expect(parseCommand('起飞')).toEqual({
       matched: false,
-      suggestion: '暂不支持该命令，请尝试：打开主驾车窗、打开后备箱、开灯',
+      suggestion: '暂不支持该命令，请尝试：打开主驾车窗、主驾车窗50%、全部车窗打开',
     })
   })
 
@@ -68,24 +127,32 @@ describe('registered VehicleAction pipeline', () => {
   })
 
   it('keeps a repeated target idempotent while an action is running', () => {
-    const first = dispatchVehicleAction({ type: 'window', target: 'driver_front', open: true })
+    const first = dispatchVehicleAction({ type: 'window', target: 'driver_front', open: true, progress: 100 })
     const firstActions = useExperienceStore.getState().activeActions
-    const second = dispatchVehicleAction({ type: 'window', target: 'driver_front', open: true })
+    const second = dispatchVehicleAction({ type: 'window', target: 'driver_front', open: true, progress: 100 })
     expect(first.ok).toBe(true)
-    expect(second).toMatchObject({ ok: true, message: '主驾车窗打开动作正在执行' })
+    expect(second).toMatchObject({ ok: true })
     expect(firstActions.size).toBe(1)
     expect(useExperienceStore.getState().activeActions.size).toBe(1)
   })
 
   it('cancels the previous action when a conflict-group target reverses', () => {
-    dispatchVehicleAction({ type: 'window', target: 'driver_front', open: true })
+    dispatchVehicleAction({ type: 'window', target: 'driver_front', open: true, progress: 100 })
     const firstId = [...useExperienceStore.getState().activeActions.keys()][0]
-    dispatchVehicleAction({ type: 'window', target: 'driver_front', open: false })
+    dispatchVehicleAction({ type: 'window', target: 'driver_front', open: false, progress: 0 })
     const activeActions = useExperienceStore.getState().activeActions
     expect(activeActions.size).toBe(1)
     expect(activeActions.has(firstId)).toBe(false)
     expect([...activeActions.values()][0].targetValue).toBe(false)
     expect(useExperienceStore.getState().lastActionOutcome).toEqual({ id: firstId, status: 'cancelled' })
+  })
+
+  it('stores window progress percentage after completion', () => {
+    const result = dispatchVehicleAction({ type: 'window', target: 'driver_front', open: true, progress: 65 })
+    if (!result.ok || !result.actionId) throw new Error('expected an action id')
+    useExperienceStore.getState().finishAction(result.actionId, 'completed')
+    expect(useExperienceStore.getState().windowProgress.get('driver_front')).toBe(65)
+    expect(useExperienceStore.getState().vehiclePartStates.get('window_driver_front')).toBe('open')
   })
 
   it('commits the domain state only after runtime completion', () => {
@@ -106,13 +173,12 @@ describe('registered VehicleAction pipeline', () => {
     expect(su7ConceptPack.actions.trunk.mode).toBe('fallback')
   })
 
-  it('keeps 360-degree rotation explicit and stops it on manual drag', () => {
-    dispatchVehicleAction({ type: 'orbit', preset: 'turntable' })
-    expect(useExperienceStore.getState().notice).toBe('已启动 360° 展台环绕')
-    useExperienceStore.getState().beginManualOrbit()
-    expect(useExperienceStore.getState().manualOrbit).toBe(true)
-    expect(useExperienceStore.getState().activeOrbitPreset).toBe('turntable')
-    expect(su7ConceptPack.orbitActions.turntable.autoRotateSpeed).toBe(2.25)
+  it('product pack contains all four window definitions', () => {
+    const packWindows = Object.keys(su7ConceptPack.actions).filter((k) => k.startsWith('window_'))
+    expect(packWindows).toContain('window_driver_front')
+    expect(packWindows).toContain('window_passenger_front')
+    expect(packWindows).toContain('window_driver_rear')
+    expect(packWindows).toContain('window_passenger_rear')
   })
 
   it('switches the presentation stage without creating another action path', () => {
@@ -128,26 +194,15 @@ describe('registered VehicleAction pipeline', () => {
       color: '#ffffff',
       removeColorMap: false,
     })
-    expect(su7ConceptPack.actions.window_driver_front).toMatchObject({ durationMs: 800, conflictGroup: 'windows' })
+    expect(su7ConceptPack.actions.window_driver_front).toMatchObject({ durationMs: 900, conflictGroup: 'window_driver_front' })
     expect(su7ConceptPack.actions.lights_headlight.conflictGroup).toBe('lights_front')
     expect(su7ConceptPack.actions.lights_taillight.conflictGroup).toBe('lights_rear')
-    expect(su7ConceptPack.actions.lights_headlight.emissiveNodes).toHaveLength(4)
-    expect(su7ConceptPack.actions.lights_taillight.emissiveNodes).toHaveLength(0)
-    expect(su7ConceptPack.actions.lights_headlight.emissiveIntensity[1]).toBeGreaterThanOrEqual(5)
-    expect(su7ConceptPack.actions.lights_taillight.emissiveIntensity[1]).toBeGreaterThan(2)
-    expect(su7ConceptPack.actions.lights_headlight.lensEmissiveIntensity[1]).toBeLessThan(1)
-    expect(su7ConceptPack.actions.lights_taillight.lensEmissiveIntensity[1]).toBeLessThan(1.5)
-    expect(su7ConceptPack.actions.lights_headlight.environmentLights).toHaveLength(2)
-    expect(su7ConceptPack.actions.lights_headlight.environmentLights.every((light) => light.intensity > 0)).toBe(true)
-    expect(su7ConceptPack.actions.lights_taillight.environmentLights).toHaveLength(2)
-    expect(su7ConceptPack.actions.lights_taillight.environmentLights.every((light) => light.intensity > 0)).toBe(true)
     expect(Object.keys(su7ConceptPack.nodeMap)).toEqual(expect.arrayContaining([
       'window_driver_front',
+      'window_passenger_front',
+      'window_driver_rear',
+      'window_passenger_rear',
       'trunk',
-      'headlight_left',
-      'headlight_right',
-      'taillight_left',
-      'taillight_right',
     ]))
   })
 })

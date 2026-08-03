@@ -3,31 +3,33 @@ import { Canvas } from '@react-three/fiber'
 import { useProgress } from '@react-three/drei'
 import { ACESFilmicToneMapping, SRGBColorSpace } from 'three'
 import { Experience } from './components/Experience'
-import { su7ConceptPack } from './pack/su7-concept.pack'
+import { su7ConceptPack, WINDOW_LABELS, WINDOW_TARGETS } from './pack/su7-concept.pack'
 import { parseCommand } from './runtime/command-parser'
 import { dispatchVehicleAction } from './runtime/action-dispatcher'
 import { createBrowserSpeechRecognition, type BrowserSpeechRecognition } from './runtime/browser-speech'
 import { useExperienceStore } from './store/experience-store'
-import type { OrbitPreset, VehicleAction } from './types'
+import type { OrbitPreset, VehicleAction, WindowTarget } from './types'
 
 const orbitButtons: Array<{ preset: OrbitPreset; label: string }> = [
   { preset: 'hero_front_left', label: '主视觉' },
   { preset: 'front', label: '前脸' },
+  { preset: 'driver_side', label: '主驾侧' },
   { preset: 'rear_three_quarter', label: '车尾' },
   { preset: 'turntable', label: '360°' },
 ]
 
-const vehicleControls: Array<{
-  id: 'window' | 'trunk' | 'headlight' | 'taillight'
+const singleVehicleControls: Array<{
+  id: 'trunk' | 'headlight' | 'taillight'
   label: string
-  enable: Exclude<VehicleAction, { type: 'orbit' }>
-  disable: Exclude<VehicleAction, { type: 'orbit' }>
+  enable: Exclude<VehicleAction, { type: 'orbit' | { type: 'window' } }>
+  disable: Exclude<VehicleAction, { type: 'orbit' | { type: 'window' } }>
 }> = [
-  { id: 'window', label: '主驾车窗', enable: { type: 'window', target: 'driver_front', open: true }, disable: { type: 'window', target: 'driver_front', open: false } },
   { id: 'trunk', label: '后备箱', enable: { type: 'trunk', open: true }, disable: { type: 'trunk', open: false } },
   { id: 'headlight', label: '大灯', enable: { type: 'lights', target: 'headlight', on: true }, disable: { type: 'lights', target: 'headlight', on: false } },
   { id: 'taillight', label: '尾灯', enable: { type: 'lights', target: 'taillight', on: true }, disable: { type: 'lights', target: 'taillight', on: false } },
 ]
+
+type ConcreteWindowTarget = Exclude<WindowTarget, 'all'>
 
 class SceneErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   state = { failed: false }
@@ -58,7 +60,7 @@ class SceneErrorBoundary extends Component<{ children: ReactNode }, { failed: bo
 export function App() {
   const [command, setCommand] = useState('')
   const [isCommandDrawerOpen, setIsCommandDrawerOpen] = useState(false)
-  const [feedback, setFeedback] = useState('拖动车身区域可自由旋转 · 滚轮缩放')
+  const [feedback, setFeedback] = useState('拖动车身区域可自由旋转 · 滚轮缩放 · 文字可输入：主驾车窗50%')
   const { progress: loadingProgress } = useProgress()
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null)
   const modelStatus = useExperienceStore((state) => state.modelStatus)
@@ -66,7 +68,7 @@ export function App() {
   const activeOrbitPreset = useExperienceStore((state) => state.activeOrbitPreset)
   const notice = useExperienceStore((state) => state.notice)
   const voiceState = useExperienceStore((state) => state.inputMode.voice)
-  const windowState = useExperienceStore((state) => state.vehiclePartStates.get('window_driver_front'))
+  const windowProgress = useExperienceStore((state) => state.windowProgress)
   const trunkState = useExperienceStore((state) => state.vehiclePartStates.get('trunk'))
   const headlightOn = useExperienceStore((state) => state.lightStates.get('headlight'))
   const taillightOn = useExperienceStore((state) => state.lightStates.get('taillight'))
@@ -165,7 +167,7 @@ export function App() {
           <span className="brand-mark" aria-hidden="true" />
           <div>
             <p>AUTOLAUNCH / PRODUCT VIEW</p>
-            <h1>2025 SU7 ULTRA</h1>
+            <h1>2025 SU7 ULTRA · 四车窗进度控制</h1>
           </div>
         </div>
         <div className="topbar-actions">
@@ -205,7 +207,7 @@ export function App() {
 
         <div className="hero-copy">
           <p className="eyebrow">PERFORMANCE, REFRAMED</p>
-          <p>可注册镜头动作 · 确定性 3D 执行</p>
+          <p>四车窗独立 0-100% 控制 · 文字/语音可指定具体进度</p>
         </div>
 
         {modelStatus === 'loading' && (
@@ -223,20 +225,73 @@ export function App() {
           <section className="vehicle-quickbar" aria-label="车辆快捷控制">
             <div className="deck-heading">
               <span>QUICK CONTROL</span>
-              <strong>车辆控制</strong>
+              <strong>四车窗控制 · 点击按钮 = 全开/全关</strong>
+            </div>
+            <div className="vehicle-buttons vehicle-buttons--windows">
+              {WINDOW_TARGETS.map((target) => {
+                const progress = windowProgress.get(target) ?? 0
+                const active = progress >= 1
+                const enable = { type: 'window' as const, target, open: true, progress: 100 }
+                const disable = { type: 'window' as const, target, open: false, progress: 0 }
+                return (
+                  <div className="window-control" key={target}>
+                    <button
+                      className={`window-control__toggle${active ? ' active' : ''}`}
+                      disabled={modelStatus !== 'ready'}
+                      onClick={() => runVehicleAction(active ? disable : enable)}
+                      aria-pressed={active}
+                      title={active ? `点击关闭 ${WINDOW_LABELS[target]}` : `点击打开 ${WINDOW_LABELS[target]}`}
+                    >
+                      <span aria-hidden="true" />
+                      {WINDOW_LABELS[target]}
+                      <small>{progress}%</small>
+                    </button>
+                    <div
+                      className="window-control__track"
+                      role="progressbar"
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={progress}
+                      aria-label={`${WINDOW_LABELS[target]} 开启进度`}
+                    >
+                      <span style={{ width: `${progress}%` }} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            <div className="deck-heading" style={{ marginTop: 12 }}>
+              <span>BULK / PARTS</span>
+              <strong>批量车窗 + 后备箱 + 灯光</strong>
             </div>
             <div className="vehicle-buttons">
-              {vehicleControls.map(({ id, label, enable, disable }) => {
-                const active = id === 'window'
-                  ? windowState === 'open'
-                  : id === 'trunk'
-                    ? trunkState === 'open'
-                    : id === 'headlight' ? Boolean(headlightOn) : Boolean(taillightOn)
+              <button
+                className="window-control__toggle bulk"
+                disabled={modelStatus !== 'ready'}
+                onClick={() => runVehicleAction({ type: 'window', target: 'all', open: true, progress: 100 })}
+                title="一键开启全部车窗"
+              >
+                <span aria-hidden="true" />
+                全部开窗
+              </button>
+              <button
+                className="window-control__toggle bulk"
+                disabled={modelStatus !== 'ready'}
+                onClick={() => runVehicleAction({ type: 'window', target: 'all', open: false, progress: 0 })}
+                title="一键关闭全部车窗"
+              >
+                <span aria-hidden="true" />
+                全部关窗
+              </button>
+              {singleVehicleControls.map(({ id, label, enable, disable }) => {
+                const active = id === 'trunk'
+                  ? trunkState === 'open'
+                  : id === 'headlight' ? Boolean(headlightOn) : Boolean(taillightOn)
                 return (
                   <button
+                    key={id}
                     className={active ? 'active' : ''}
                     disabled={modelStatus !== 'ready'}
-                    key={id}
                     onClick={() => runVehicleAction(active ? disable : enable)}
                     aria-pressed={active}
                   >
@@ -271,17 +326,17 @@ export function App() {
             onClick={() => setIsCommandDrawerOpen((open) => !open)}
           >
             <span aria-hidden="true">{isCommandDrawerOpen ? '⌄' : '⌃'}</span>
-            文字 / 语音控制
+            文字 / 语音控制（支持具体进度，如：主驾车窗50%）
           </button>
           <div className="interaction-bar" id="command-drawer-content" aria-hidden={!isCommandDrawerOpen}>
             <form onSubmit={submitCommand}>
-              <label htmlFor="camera-command">统一 VehicleAction 控制</label>
+              <label htmlFor="camera-command">统一 VehicleAction 控制 · 支持 0-100% 进度</label>
               <div>
                 <input
                   id="camera-command"
                   value={command}
                   onChange={(event) => setCommand(event.target.value)}
-                  placeholder="试试：打开主驾车窗 / 打开后备箱 / 开灯"
+                  placeholder="试试：打开主驾车窗 / 副驾车窗30% / 全部车窗50% / 打开后备箱 / 开灯"
                   tabIndex={isCommandDrawerOpen ? 0 : -1}
                 />
                 <button
@@ -299,6 +354,9 @@ export function App() {
               </div>
             </form>
             <p>{feedback}</p>
+            <p className="interaction-bar__examples">
+              示例：打开副驾车窗 · 主驾后窗70% · 全部车窗关闭 · 打开后备箱
+            </p>
           </div>
         </div>
       </section>

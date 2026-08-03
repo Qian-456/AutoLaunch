@@ -1,24 +1,48 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useGLTF } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
-import { Color, Group, MathUtils, Mesh, Object3D, type MeshStandardMaterial } from 'three'
+import { BoxGeometry, Color, Group, MathUtils, Mesh, MeshStandardMaterial, Object3D } from 'three'
 import { SkeletonUtils } from 'three/examples/jsm/Addons.js'
-import { su7ConceptPack } from '../pack/su7-concept.pack'
+import { WINDOW_TARGETS, WINDOW_LABELS, su7ConceptPack, type WindowActionDefinition } from '../pack/su7-concept.pack'
 import { useExperienceStore } from '../store/experience-store'
-import type { ActiveVehicleAction } from '../types'
+import type { ActiveVehicleAction, WindowTarget } from '../types'
 import { VehicleLightEffects } from './VehicleLightEffects'
 import { VehiclePlate } from './VehiclePlate'
 
-type TransformAnimation = {
-  kind: 'window' | 'trunk'
+type WindowAnimation = {
+  kind: 'window'
+  execution: ActiveVehicleAction
+  /** Concrete target (never 'all'). */
+  target: Exclude<WindowTarget, 'all'>
+  /** Either the real GLB mesh or the fallback virtual placeholder mesh we spawn. */
+  object: Object3D
+  /** Mirrors the WindowNodeRefs.isVirtual flag so the rollback path is uniform. */
+  isVirtual: boolean
+  /**
+   * Normalized animation range expressed as [startProgress, endProgress] 0..100.
+   * We lerp the mesh using packDefinition.(axis + offsets) converted into absolute
+   * translation values, so "50%" truly lands at the midpoint between closed and
+   * fully-descended positions.
+   */
+  progressFrom: number
+  progressTo: number
+  /** Cached pack definition so we don't look it up per-frame. */
+  definition: WindowActionDefinition
+  /** Closed (0%) reference position captured at scene init. */
+  closedBase: readonly [number, number, number]
+  startedAt: number
+  materials?: MeshStandardMaterial[]
+  fromOpacity?: number
+  toOpacity?: number
+}
+
+type TrunkAnimation = {
+  kind: 'trunk'
   execution: ActiveVehicleAction
   object: Object3D
   from: number
   to: number
   startedAt: number
-  materials?: MeshStandardMaterial[]
-  fromOpacity?: number
-  toOpacity?: number
 }
 
 type LightAnimation = {
@@ -40,7 +64,26 @@ type FallbackAnimation = {
   startedAt: number
 }
 
-type RuntimeAnimation = TransformAnimation | LightAnimation | FallbackAnimation
+type RuntimeAnimation = WindowAnimation | TrunkAnimation | LightAnimation | FallbackAnimation
+
+type WindowNodeRefs = {
+  /**
+   * For each physical window we keep either the real GLB Object3D or a
+   * freshly-created placeholder Mesh + Group. Either way the returned object
+   * supports .position translation on its declared axis so the rest of the
+   * runtime can treat them uniformly.
+   */
+  object: Object3D
+  /**
+   * The closed (0%) reference position for the translation axis recorded at
+   * scene load. Stored per-axis so we can rebuild the absolute vector cleanly.
+   */
+  closedPosition: { x: number; y: number; z: number }
+  /** True when the object is a virtual placeholder (no matching GLB node). */
+  isVirtual: boolean
+  /** Materials attached to the object; used for the subtle opacity fade. */
+  materials: MeshStandardMaterial[]
+}
 
 function collectStandardMaterials(root: Object3D | null | undefined) {
   const materials: MeshStandardMaterial[] = []
@@ -56,12 +99,117 @@ function collectStandardMaterials(root: Object3D | null | undefined) {
   return materials
 }
 
+/**
+ * Build the per-window runtime handles. If a real GLB node is present in the
+ * scene we attach directly to it; otherwise we construct a translucent glass
+ * box using the virtualWindow spec in the Product Pack and parent it into
+ * vehicleRoot so the descend animation is still visible on the car body.
+ */
+function buildWindowRefs(
+  scene: Object3D,
+  vehicleRoot: Group,
+): Record<Exclude<WindowTarget, 'all'>, WindowNodeRefs> {
+  const out = {} as Record<Exclude<WindowTarget, 'all'>, WindowNodeRefs>
+  for (const target of WINDOW_TARGETS) {
+    const semanticId = `window_${target}` as const
+    const definition = su7ConceptPack.actions[semanticId] as WindowActionDefinition | undefined
+    if (!definition) continue
+    const nodeName = su7ConceptPack.nodeMap[semanticId as keyof typeof su7ConceptPack.nodeMap]
+    const realNode = nodeName ? scene.getObjectByName(nodeName) : null
+    let object: Object3D
+    let materials: MeshStandardMaterial[]
+    let isVirtual = false
+    if (realNode) {
+      object = realNode
+      materials = collectStandardMaterials(realNode)
+    } else {
+      isVirtual = true
+      const group = new Group()
+      group.name = `VirtualWindow_${target}`
+      const geometry = new BoxGeometry(
+        definition.virtualWindow.size[0],
+        definition.virtualWindow.size[1],
+        definition.virtualWindow.size[2],
+      )
+      const material = new MeshStandardMaterial({
+        color: new Color(definition.virtualWindow.glassColor),
+        metalness: 0.08,
+        roughness: 0.12,
+        transparent: true,
+        opacity: 0.72,
+      })
+      const mesh = new Mesh(geometry, material)
+      mesh.castShadow = true
+      mesh.receiveShadow = true
+      group.add(mesh)
+      group.position.set(
+        definition.virtualWindow.position[0],
+        definition.virtualWindow.position[1],
+        definition.virtualWindow.position[2],
+      )
+      if (definition.virtualWindow.rotation) {
+        group.rotation.set(
+          definition.virtualWindow.rotation[0],
+          definition.virtualWindow.rotation[1],
+          definition.virtualWindow.rotation[2],
+        )
+      }
+      vehicleRoot.add(group)
+      object = group
+      materials = [material]
+    }
+    out[target] = {
+      object,
+      closedPosition: {
+        x: object.position.x,
+        y: object.position.y,
+        z: object.position.z,
+      },
+      isVirtual,
+      materials,
+    }
+  }
+  return out
+}
+
+/**
+ * Convert a normalized progress (0..100) into the absolute world-space position
+ * for the declared axis by interpolating the pack's closedOffset / openOffset.
+ */
+function axisPositionForProgress(
+  closedValue: number,
+  definition: WindowActionDefinition,
+  progress01: number,
+): number {
+  const offset = MathUtils.lerp(definition.closedOffset, definition.openOffset, progress01)
+  return closedValue + offset
+}
+
+/**
+ * For virtual placeholder windows we apply a much larger visible descend so
+ * users can clearly see the glass disappear into the door pocket. Uses the
+ * descendOffset vector scaled by progress.
+ */
+function applyVirtualWindowPosition(
+  object: Object3D,
+  base: { x: number; y: number; z: number },
+  definition: WindowActionDefinition,
+  progress01: number,
+): void {
+  const [dx, dy, dz] = definition.virtualWindow.descendOffset
+  object.position.set(
+    base.x + dx * progress01,
+    base.y + dy * progress01,
+    base.z + dz * progress01,
+  )
+}
+
 export function VehicleModel() {
   const gltf = useGLTF(su7ConceptPack.model.path)
   const renderer = useThree((state) => state.gl)
   const scene = useMemo(() => SkeletonUtils.clone(gltf.scene), [gltf.scene])
   const vehicleRoot = useRef<Group>(null)
-  const windowClosedY = useRef<number | null>(null)
+  const windowRefs = useRef<Record<Exclude<WindowTarget, 'all'>, WindowNodeRefs> | null>(null)
   const vehicleClosedY = useRef(0)
   const runtimeAnimations = useRef(new Map<string, RuntimeAnimation>())
   const activeActions = useExperienceStore((state) => state.activeActions)
@@ -77,7 +225,7 @@ export function VehicleModel() {
     console.info('[AutoLaunch] GLB nodes:', scene.children.map((node) => node.name))
     if (missingNodes.length) {
       console.warn('[AutoLaunch] missing node-map entries:', missingNodes)
-      setNotice('⚠ 当前演示模型部分动作节点暂未映射，仅展示交互闭环。')
+      setNotice('⚠ 当前演示模型部分动作节点暂未映射，已用虚拟窗户形态代替真实动画。')
     }
     scene.traverse((object) => {
       object.castShadow = true
@@ -142,9 +290,11 @@ export function VehicleModel() {
       mesh.material = Array.isArray(mesh.material) ? clonedMaterials : clonedMaterials[0]
     })
 
-    const windowNode = scene.getObjectByName(su7ConceptPack.nodeMap.window_driver_front)
-    if (windowNode) windowClosedY.current = windowNode.position.y
-    if (vehicleRoot.current) vehicleClosedY.current = vehicleRoot.current.position.y
+    if (vehicleRoot.current) {
+      windowRefs.current = buildWindowRefs(scene, vehicleRoot.current)
+      vehicleClosedY.current = vehicleRoot.current.position.y
+      ;(globalThis as unknown as { __AUDIT_WINDOW_REFS__: typeof windowRefs.current }).__AUDIT_WINDOW_REFS__ = windowRefs.current
+    }
     setModelStatus('ready')
   }, [renderer, scene, setModelStatus, setNotice])
 
@@ -158,25 +308,33 @@ export function VehicleModel() {
       const startedAt = performance.now()
 
       if (execution.action.type === 'window') {
-        const node = scene.getObjectByName(su7ConceptPack.nodeMap.window_driver_front)
-        if (!node || windowClosedY.current === null) {
+        const target = execution.action.target as Exclude<WindowTarget, 'all'>
+        const refs = windowRefs.current?.[target]
+        const semanticId = `window_${target}` as const
+        const definition = su7ConceptPack.actions[semanticId] as WindowActionDefinition | undefined
+        if (!refs || !definition) {
           requestOrbit('driver_side')
-          setNotice('当前演示模型车窗节点暂不可用，已用镜头聚焦代替。')
+          setNotice(`${WINDOW_LABELS[target]} 暂不可用，已切换到主驾侧面镜头聚焦。`)
           runtimeAnimations.current.set(execution.id, { kind: 'fallback', execution, startedAt })
           continue
         }
-        const definition = su7ConceptPack.actions.window_driver_front
-        const materials = collectStandardMaterials(node)
+        const progressFrom = Math.max(0, Math.min(100, execution.startProgress ?? 0))
+        const progressTo = Math.max(0, Math.min(100, execution.targetProgress ?? (execution.targetValue ? 100 : 0)))
+        const materials = refs.materials
         runtimeAnimations.current.set(execution.id, {
           kind: 'window',
           execution,
-          object: node,
-          from: node.position.y,
-          to: windowClosedY.current + (execution.targetValue ? definition.openOffset : definition.closedOffset),
+          target,
+          object: refs.object,
+          isVirtual: refs.isVirtual,
+          progressFrom,
+          progressTo,
+          definition,
+          closedBase: [refs.closedPosition.x, refs.closedPosition.y, refs.closedPosition.z] as const,
           startedAt,
           materials,
           fromOpacity: materials[0]?.opacity ?? 1,
-          toOpacity: execution.targetValue ? 0.04 : 1,
+          toOpacity: 1 - (progressTo / 100) * 0.6,
         })
         continue
       }
@@ -198,10 +356,10 @@ export function VehicleModel() {
         continue
       }
 
-      const definition = execution.action.target === 'headlight'
+      const lightDefinition = execution.action.target === 'headlight'
         ? su7ConceptPack.actions.lights_headlight
         : su7ConceptPack.actions.lights_taillight
-      const materials = definition.emissiveNodes.flatMap((nodeName) =>
+      const materials = lightDefinition.emissiveNodes.flatMap((nodeName) =>
         collectStandardMaterials(scene.getObjectByName(nodeName)),
       )
       const lensSemanticIds = execution.action.target === 'headlight'
@@ -219,11 +377,11 @@ export function VehicleModel() {
         execution,
         materials,
         from: materials[0]?.emissiveIntensity ?? 0,
-        to: definition.emissiveIntensity[execution.targetValue ? 1 : 0],
-        color: new Color(definition.color),
+        to: lightDefinition.emissiveIntensity[execution.targetValue ? 1 : 0],
+        color: new Color(lightDefinition.color),
         lensMaterials,
         lensFrom: lensMaterials[0]?.emissiveIntensity ?? 0,
-        lensTo: definition.lensEmissiveIntensity[execution.targetValue ? 1 : 0],
+        lensTo: lightDefinition.lensEmissiveIntensity[execution.targetValue ? 1 : 0],
         startedAt,
       })
     }
@@ -239,13 +397,20 @@ export function VehicleModel() {
         continue
       }
       if (Date.now() > execution.timeoutAt) {
-        if (animation.kind === 'window' || animation.kind === 'trunk') {
-          animation.object.position.y = animation.from
-          if (animation.kind === 'window' && animation.materials && animation.fromOpacity !== undefined) {
+        if (animation.kind === 'window') {
+          const { definition, closedBase, object, isVirtual } = animation
+          if (isVirtual) {
+            applyVirtualWindowPosition(object, { x: closedBase[0], y: closedBase[1], z: closedBase[2] }, definition, 0)
+          } else {
+            const axis = definition.axis.toLowerCase() as 'x' | 'y' | 'z'
+            object.position[axis] = axisPositionForProgress(closedBase[axis === 'x' ? 0 : axis === 'y' ? 1 : 2], definition, 0)
+          }
+          if (animation.materials && animation.fromOpacity !== undefined) {
             animation.materials.forEach((material) => { material.opacity = animation.fromOpacity! })
           }
-        }
-        if (animation.kind === 'lights') {
+        } else if (animation.kind === 'trunk') {
+          animation.object.position.y = animation.from
+        } else if (animation.kind === 'lights') {
           animation.materials.forEach((material) => { material.emissiveIntensity = animation.from })
           animation.lensMaterials.forEach((material) => { material.emissiveIntensity = animation.lensFrom })
         }
@@ -256,11 +421,22 @@ export function VehicleModel() {
 
       const progress = Math.min(1, (now - animation.startedAt) / execution.durationMs)
       const eased = MathUtils.smoothstep(progress, 0, 1)
-      if (animation.kind === 'window' || animation.kind === 'trunk') {
-        animation.object.position.y = MathUtils.lerp(animation.from, animation.to, eased)
+      if (animation.kind === 'window') {
+        const normalizedProgress = MathUtils.lerp(animation.progressFrom, animation.progressTo, eased) / 100
+        const axis = animation.definition.axis.toLowerCase() as 'x' | 'y' | 'z'
+        if (animation.isVirtual) {
+          applyVirtualWindowPosition(
+            animation.object,
+            { x: animation.closedBase[0], y: animation.closedBase[1], z: animation.closedBase[2] },
+            animation.definition,
+            normalizedProgress,
+          )
+        } else {
+          const baseValue = animation.closedBase[axis === 'x' ? 0 : axis === 'y' ? 1 : 2]
+          animation.object.position[axis] = axisPositionForProgress(baseValue, animation.definition, normalizedProgress)
+        }
         if (
-          animation.kind === 'window'
-          && animation.materials
+          animation.materials
           && animation.fromOpacity !== undefined
           && animation.toOpacity !== undefined
         ) {
@@ -271,6 +447,8 @@ export function VehicleModel() {
             material.needsUpdate = true
           })
         }
+      } else if (animation.kind === 'trunk') {
+        animation.object.position.y = MathUtils.lerp(animation.from, animation.to, eased)
       } else if (animation.kind === 'lights') {
         const intensity = MathUtils.lerp(animation.from, animation.to, eased)
         animation.materials.forEach((material) => {

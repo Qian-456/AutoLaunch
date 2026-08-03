@@ -1,4 +1,36 @@
-import type { OrbitActionDefinition, OrbitPreset } from '../types'
+import type { OrbitActionDefinition, OrbitPreset, WindowTarget } from '../types'
+
+/**
+ * Per-window action definition.
+ * - When the real GLB node exists: translate the actual mesh on the configured axis.
+ * - When the node is missing: VehicleModel.tsx spawns a translucent placeholder
+ *   box at `virtualPosition` with size `virtualSize` so the user sees a clear
+ *   window-descend animation regardless of GLB completeness.
+ */
+export type WindowActionDefinition = {
+  durationMs: number
+  conflictGroup: 'windows'
+  /** Translation axis applied to the real node. */
+  axis: 'Y' | 'X' | 'Z'
+  /** Offset at 0% (closed). Relative to the node's baked position. */
+  closedOffset: number
+  /** Offset at 100% (fully open). Relative to the node's baked position. */
+  openOffset: number
+  reversible: true
+  /** Fallback virtual-mesh window spec used when nodeMap lookup fails. */
+  virtualWindow: {
+    /** Position of the placeholder mesh inside vehicleRoot (world/meters after scale). */
+    position: readonly [number, number, number]
+    /** Size of the placeholder mesh in meters. */
+    size: readonly [number, number, number]
+    /** Rotation euler (radians) for the placeholder mesh. */
+    rotation?: readonly [number, number, number]
+    /** Hex tint of the translucent glass. */
+    glassColor: string
+    /** Per-axis offset the placeholder descends at 100% progress (meters). */
+    descendOffset: readonly [number, number, number]
+  }
+}
 
 export const su7ConceptPack = {
   id: 'su7-ultra-concept',
@@ -19,6 +51,9 @@ export const su7ConceptPack = {
   nodeMap: {
     body: 'CarPaint1',
     window_driver_front: 'XiaomicarGlass_front_2_Side_1_carGlass_front_2_Side_1_Car_glass',
+    window_passenger_front: 'XiaomicarGlass_front_2_Side_2_carGlass_front_2_Side_2_Car_glass',
+    window_driver_rear: 'XiaomicarGlass_back_2_Side_2_carGlass_back_2_Side_2_Car_glass',
+    window_passenger_rear: 'XiaomicarGlass_back_2_Side_1_carGlass_back_2_Side_1_Car_glass',
     trunk: 'UNMAPPED_TRUNK_HATCH',
     headlight_left: 'XiaomicarLightGlass_Front_carLightGlass_Front_Car_glass',
     headlight_right: 'XiaomicarLightGlass_Front_1__carLightGlass_Front_001_Car_glass',
@@ -43,13 +78,70 @@ export const su7ConceptPack = {
   },
   actions: {
     window_driver_front: {
-      durationMs: 800,
-      conflictGroup: 'windows',
+      durationMs: 900,
+      conflictGroup: 'window_driver_front',
       axis: 'Y',
       closedOffset: 0,
-      openOffset: -0.0038,
+      /**
+       * Increased from the previous 0.0038m. At model scale=100 this pushes the
+       * real mesh down by ~35cm inside the door pocket, so the user clearly sees
+       * the glass disappearing.
+       */
+      openOffset: -0.35,
       reversible: true,
-    },
+      virtualWindow: {
+        position: [-0.30, 1.30, -1.15] as const,
+        size: [0.02, 0.58, 0.95] as const,
+        rotation: [0, 0, 0] as const,
+        glassColor: '#0a141f',
+        descendOffset: [0, -0.55, 0] as const,
+      },
+    } satisfies WindowActionDefinition,
+    window_passenger_front: {
+      durationMs: 900,
+      conflictGroup: 'window_passenger_front',
+      axis: 'Y',
+      closedOffset: 0,
+      openOffset: -0.35,
+      reversible: true,
+      virtualWindow: {
+        position: [-0.30, 1.30, 1.15] as const,
+        size: [0.02, 0.58, 0.95] as const,
+        rotation: [0, 0, 0] as const,
+        glassColor: '#0a141f',
+        descendOffset: [0, -0.55, 0] as const,
+      },
+    } satisfies WindowActionDefinition,
+    window_driver_rear: {
+      durationMs: 850,
+      conflictGroup: 'window_driver_rear',
+      axis: 'Y',
+      closedOffset: 0,
+      openOffset: -0.30,
+      reversible: true,
+      virtualWindow: {
+        position: [0.55, 1.28, -1.10] as const,
+        size: [0.02, 0.48, 0.80] as const,
+        rotation: [0, 0, 0] as const,
+        glassColor: '#0a141f',
+        descendOffset: [0, -0.46, 0] as const,
+      },
+    } satisfies WindowActionDefinition,
+    window_passenger_rear: {
+      durationMs: 850,
+      conflictGroup: 'window_passenger_rear',
+      axis: 'Y',
+      closedOffset: 0,
+      openOffset: -0.30,
+      reversible: true,
+      virtualWindow: {
+        position: [0.55, 1.28, 1.10] as const,
+        size: [0.02, 0.48, 0.80] as const,
+        rotation: [0, 0, 0] as const,
+        glassColor: '#0a141f',
+        descendOffset: [0, -0.46, 0] as const,
+      },
+    } satisfies WindowActionDefinition,
     trunk: {
       durationMs: 1200,
       conflictGroup: 'rear',
@@ -396,3 +488,22 @@ export const su7ConceptPack = {
 } as const
 
 export type Su7ConceptPack = typeof su7ConceptPack
+
+/**
+ * Ordered list of per-window semantic IDs for the four physical windows.
+ * 'all' commands iterate this array and issue one action per entry.
+ */
+export const WINDOW_TARGETS: Exclude<WindowTarget, 'all'>[] = [
+  'driver_front',
+  'passenger_front',
+  'driver_rear',
+  'passenger_rear',
+] as const
+
+/** Human-readable label for each window target, used by UI feedback + tests. */
+export const WINDOW_LABELS: Record<Exclude<WindowTarget, 'all'>, string> = {
+  driver_front: '主驾车窗',
+  passenger_front: '副驾车窗',
+  driver_rear: '主驾后车窗',
+  passenger_rear: '副驾后车窗',
+} as const
