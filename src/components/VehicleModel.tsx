@@ -67,6 +67,15 @@ export function VehicleModel() {
           material.emissive.set('#000000')
           material.emissiveMap = null
           material.vertexColors = false
+          if ('envMapIntensity' in nodeOverride) {
+            material.envMapIntensity = nodeOverride.envMapIntensity
+          }
+          if ('removeAllMaps' in nodeOverride && nodeOverride.removeAllMaps) {
+            material.normalMap = null
+            material.roughnessMap = null
+            material.metalnessMap = null
+            material.aoMap = null
+          }
           material.needsUpdate = true
         }
         const colorMapRestore = su7ConceptPack.appearance.colorMapRestores.find((item) =>

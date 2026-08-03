@@ -218,6 +218,10 @@ FBX 源文件对照记录：`2025-xiaomi-su7-ultra/source/FINAL_MODEL_SU7U/FINAL
 
 左右后视镜的上壳、下壳与镜面组件分别注册为六个 `mirror_*` 语义节点。上下壳使用低金属度纯黑材质，镜面使用带轻微反射的深黑材质，避免共享 `CarPaint` 和 `CHROME_Logo` 令后视镜出现黄色或银白色。
 
+车尾拼接高光修正：左右尾灯玻璃以独立节点级覆盖压成均匀深黑，尾门上沿两块独立车漆面降低金属度并提高粗糙度，以减弱尾灯边缘银白描边和尾门右肩的白色高光。该处理不启用此前记录的红色尾灯实验，也不修改尾部徽标或车牌。
+
+二次定位确认残留细线来自车尾 `carLightPlastic_BrilliantBlack_2 / Plastic_Light` 外壳，而非位于车头的 `Light_Chroaming` 镀铬节点。该尾灯外壳现已关闭环境反射并清除颜色、法线、粗糙度、金属度与 AO 贴图；左右尾灯玻璃的环境反射也降至接近零，以消除侧后视角下的银青色接缝。
+
 边缘瑕疵校正：FBX/GLB 材质表显示 `Brilliant_Black`、`BrilliantGray` 与 `Brilliant_Silver` 共享亮色贴图，且原 `Brilliant_Silver` 带异常发光因子。Pack 会清除这些贴图和发光，将前后唇、窗框及侧裙统一为低金属度深黑材质；`Roof`、`Roof_Glass`、`Windows` 同样去除白色源贴图。Canvas 使用 1.5–2 倍像素比和最高 8 倍各向异性过滤，并降低展示灯光强度以减少边缘锯齿、摩尔纹与过曝白边。
 
 ## FastAPI 一键部署

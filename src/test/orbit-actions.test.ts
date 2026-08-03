@@ -83,11 +83,20 @@ describe('registered OrbitAction pipeline', () => {
       'mirror_right_top',
       'mirror_right_bottom',
       'mirror_right_glass',
+      'taillight_left_dark',
+      'taillight_right_dark',
+      'taillight_rear_housing_dark',
+      'rear_body_upper',
+      'rear_body_lip',
     ])
     expect(su7ConceptPack.appearance.colorMapRestores).toHaveLength(1)
     expect(su7ConceptPack.appearance.colorMapRestores[0].semanticId).toBe('trim_side_silver_decal')
     expect(su7ConceptPack.appearance.colorMapRestores[0].nodes).toEqual([
       'XiaomicarFlankLogo_carFlankLogo_blinn11_CarPaint_0',
     ])
+    expect(su7ConceptPack.appearance.nodeOverrides.find((item) => item.semanticId === 'taillight_rear_housing_dark')).toMatchObject({
+      envMapIntensity: 0,
+      removeAllMaps: true,
+    })
   })
 })
