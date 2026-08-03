@@ -5,6 +5,7 @@
 
 # ---------- 依赖 ----------
 node_modules/
+.venv/
 .pnp/
 .pnp.js
 .yarn/install-state.gz
@@ -35,6 +36,7 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 *.log
+*.tsbuildinfo
 
 # ---------- 环境变量（密钥绝不入库） ----------
 .env
@@ -80,3 +82,6 @@ Desktop.ini
 $RECYCLE.BIN/
 *.tmp
 *.temp
+
+# ---------- 产品 Pack 临时工作目录 ----------
+2025-xiaomi-su7-ultra/

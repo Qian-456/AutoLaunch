@@ -77,24 +77,24 @@ npm run test:coverage    # 生成覆盖率报告
 ```
 
 脚本逻辑：
-1. 若 `public\assets\su7_ultra.glb` 已存在 → 直接退出。
-2. 若项目根目录存在 `su7_ultra.glb` → 自动复制到目标路径。
+1. 若 `public\assets\2025_xiaomi_su7_ultra.glb` 已存在 → 直接退出。
+2. 若项目根目录存在 `2025_xiaomi_su7_ultra.glb` → 自动复制到目标路径。
 3. 否则打开 Sketchfab 页面供用户手动下载，并给出拷贝位置指引。
 
 ### 手动下载
 
 1. 访问（需注册 Sketchfab 免费账号登录）：
-   https://sketchfab.com/3d-models/2025-xiaomi-su7-ultra-production-version-9d0a0a9285cb4ca59ccb9322ddf58d24#download
+   https://sketchfab.com/3d-models/2025-xiaomi-su7-ultra-19da48fdd841430b90046c7ed43b3cc8#download
 2. 点击 `Download` → 下载 **glTF Binary (.glb)** 格式。
-3. 放到 `public\assets\su7_ultra.glb`（推荐）或项目根目录 `su7_ultra.glb`。
+3. 放到 `public\assets\2025_xiaomi_su7_ultra.glb`（推荐）或项目根目录 `2025_xiaomi_su7_ultra.glb`。
 
 ### ⚠ 合规强制要求
 
-本项目默认包含的 3D 模型受 **CC BY-NC-SA 4.0** 协议约束，任何公开展示（页面 / 视频 / 截图 / 文章）**必须**同时显示：
+当前页面实际加载的 `2025_xiaomi_su7_ultra.glb` 内嵌元数据显示其受 **CC BY 4.0** 协议约束，任何公开展示（页面 / 视频 / 截图 / 文章）**必须**同时显示：
 
-- **原作者**：Ddiaz Design
+- **原作者**：TechFreak
 - **来源**：Sketchfab
-- **许可协议**：CC BY-NC-SA 4.0（非商业使用 + 署名 + 相同方式共享衍生作品）
+- **许可协议**：CC BY 4.0（必须署名）
 - **非官方声明**：本演示为非官方概念作品，不代表小米或任何品牌官方立场
 
 **禁止事项**：不得将 SU7 模型用于直接商业用途（出售、广告、品牌合作物料、暗示官方合作等）。对外商业化演示前，请替换为原创或商业授权明确的模型。
@@ -193,7 +193,41 @@ AutoLaunch/
 | 组成 | 版权/协议 | 来源 | 说明 |
 |---|---|---|---|
 | AutoLaunch 项目源码 | MIT（待 v0.1 时补 LICENSE 文件） | 本仓库 | 框架代码 |
-| Xiaomi SU7 Ultra 3D 模型 | **CC BY-NC-SA 4.0** | Sketchfab · Ddiaz Design | 非商业使用、必须署名；详见上节 |
+| Xiaomi SU7 Ultra 3D 模型 | **CC BY 4.0** | Sketchfab · TechFreak | 必须署名；详见上节 |
 | 架构文档 / Subagent 配置 | CC BY 4.0（署名即可） | 本仓库 | 自由复用 |
 
 > ⚠ 本项目为**非官方概念演示**，与小米或任何汽车品牌不存在官方合作关系。任何公开内容必须同时显示"非官方"声明。
+
+## 当前 3D 展示与 OrbitAction 验收
+
+页面提供“参考图视角 / 正面 / 主驾侧 / 车尾 3/4 / 360° 环绕”五个注册动作。按钮和文字命令都会生成同一类 `VehicleAction`：`{ type: 'orbit', preset }`，再经 `ActionDispatcher` 进入唯一的相机状态。鼠标拖动会立即停止自动环绕，且不会自动恢复。
+
+手动验收：
+
+1. 执行 `npm run inspect:glb`，确认输出 `2025_xiaomi_su7_ultra.glb`、307 个节点和有效包围盒。
+2. 执行 `npm run dev`，打开 `http://localhost:5173`；10 秒内应看到黄色车模、黑色轮圈、完整署名且无 404。
+3. 依次点击五个镜头按钮，再输入“旋转一圈”；确认 450ms 平滑切换，拖动车模后提示“不会自动恢复镜头”。
+
+当前 Pack 会隐藏模型中不符合参考车的侧身银色贴图、原始前后牌照与尾翼白色装饰图案，并使用统一黄色金属车漆、黑色前后饰件以及前白后黑的 `SU7 Ultra` 牌照。尾灯红色发光方案目前只以 `enabled: false` 的实验配置记录，暂不改变原模型灯光。受原始 GLB 几何限制，后保险杠开孔、尾翼支架和图 2 实车参考仍存在造型差异；修正真实轮廓需要后续获得更准确模型或进行保持原许可的模型切分/重拓扑。
+
+FBX 源文件对照记录：`2025-xiaomi-su7-ultra/source/FINAL_MODEL_SU7U/FINAL_MODEL_SU7U.fbx` 与 GLB 使用同一套对象命名。侧身灰色长条来自 `CarPaint_Decal.png`，不是 `carFlankLogo` 或 `carFlankMesh` 几何；GLB 的 `CarPaint.baseColorTexture` 也对应这一贴花，因此运行时仅禁用该颜色贴图，保留侧身节点。`carRoofShape.png` 本身包含白色车顶区域，当前深色车顶覆盖同样属于有依据的材质校正。
+
+边缘瑕疵校正：FBX/GLB 材质表显示 `Brilliant_Black`、`BrilliantGray` 与 `Brilliant_Silver` 共享亮色贴图，且原 `Brilliant_Silver` 带异常发光因子。Pack 会清除这些贴图和发光，将前后唇、窗框及侧裙统一为低金属度深黑材质；`Roof`、`Roof_Glass`、`Windows` 同样去除白色源贴图。Canvas 使用 1.5–2 倍像素比和最高 8 倍各向异性过滤，并降低展示灯光强度以减少边缘锯齿、摩尔纹与过曝白边。
+
+## FastAPI 一键部署
+
+Windows 本地部署（首次执行会创建 `.venv` 并安装 FastAPI）：
+
+```powershell
+npm run deploy
+```
+
+启动完成后访问 `http://localhost:8000`。健康检查位于 `http://localhost:8000/api/health`，接口文档位于 `http://localhost:8000/api/docs`。若已安装依赖，可执行 `scripts\deploy.ps1 -SkipInstall -Port 8080` 加快再次启动。
+
+Docker 部署：
+
+```powershell
+docker compose up --build
+```
+
+部署前会强制检查 `public/assets/2025_xiaomi_su7_ultra.glb`，Vite 构建后 FastAPI 同源托管页面、JS/CSS 与模型文件；模型缺失或构建产物不完整时会直接失败，不会启动一个空白站点。

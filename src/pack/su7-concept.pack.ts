@@ -1,0 +1,130 @@
+import type { OrbitActionDefinition, OrbitPreset } from '../types'
+
+export const su7ConceptPack = {
+  id: 'su7-ultra-concept',
+  version: '0.1.0',
+  model: {
+    path: '/assets/2025_xiaomi_su7_ultra.glb',
+    scale: 100,
+    rotation: [0, 0, 0] as const,
+    position: [0, 0, 0] as const,
+  },
+  attribution: {
+    author: 'TechFreak',
+    source: 'Sketchfab',
+    sourceUrl: 'https://sketchfab.com/3d-models/2025-xiaomi-su7-ultra-19da48fdd841430b90046c7ed43b3cc8',
+    license: 'CC BY 4.0',
+    licenseUrl: 'https://creativecommons.org/licenses/by/4.0/',
+  },
+  nodeMap: {
+    body: 'CarPaint1',
+    window_driver_front: 'XiaomicarGlass_front_2_Side_1_carGlass_front_2_Side_1_Car_glass',
+    trunk: 'Plastic_Trunk',
+    headlight_left: 'XiaomicarLightGlass_Front_carLightGlass_Front_Car_glass',
+    headlight_right: 'XiaomicarLightGlass_Front_1__carLightGlass_Front_001_Car_glass',
+    taillight_left: 'XiaomicarLightGlass_Back_1_carLightGlass_Back_1_lambert210',
+    taillight_right: 'XiaomicarLightGlass_Back_2_carLightGlass_Back_2_lambert210',
+  },
+  appearance: {
+    hiddenNodes: [
+      'XiaomicarPlate_carPlate_aaa_Details_0',
+      'Xiaomiempennage_img_empennage_img_lambert46_Details_0',
+    ],
+    materialOverrides: [
+      { material: 'RIM_1', color: '#070809', metalness: 0.88, roughness: 0.24, removeColorMap: true },
+      { material: 'Color_rim', color: '#070809', metalness: 0.88, roughness: 0.24, removeColorMap: true },
+      { material: 'tire', color: '#08090a', metalness: 0.02, roughness: 0.82, removeColorMap: true },
+      { material: 'Roof', color: '#080a0d', metalness: 0.04, roughness: 0.52, removeColorMap: true },
+      { material: 'Roof_Glass', color: '#090b0e', metalness: 0.15, roughness: 0.18, removeColorMap: true },
+      {
+        material: 'CarPaint',
+        color: '#f0c400',
+        metalness: 0.38,
+        roughness: 0.36,
+        removeColorMap: true,
+        note: 'FBX 对照确认 GLB baseColorTexture 对应 CarPaint_Decal.png；禁用该贴花即可移除灰色侧线，无需隐藏侧身节点。',
+      },
+      { material: 'Windows', color: '#020305', metalness: 0.0, roughness: 0.2, removeColorMap: true },
+      { material: 'Brilliant_Black', color: '#050608', metalness: 0.04, roughness: 0.56, removeColorMap: true },
+      { material: 'BrilliantGray', color: '#050608', metalness: 0.04, roughness: 0.6, removeColorMap: true },
+      { material: 'Brilliant_Silver', color: '#050608', metalness: 0.04, roughness: 0.6, removeColorMap: true },
+    ],
+    lightingExperiments: [
+      {
+        id: 'taillight-red-preview',
+        enabled: false,
+        note: '暂不应用。后续灯光系统可将左右尾灯作为同一 lights_rear 冲突组管理。',
+        node: 'XiaomicarLightGlass_Back_1_carLightGlass_Back_1_lambert210_D_Glass_0',
+        color: '#d90b37',
+        emissive: '#c9002f',
+        emissiveIntensity: 0.8,
+        metalness: 0.05,
+        roughness: 0.2,
+        removeColorMap: true,
+      },
+      {
+        id: 'taillight-red-preview-right',
+        enabled: false,
+        note: '与左尾灯保持相同曲线；建议由 lights:taillight:on/off 统一驱动。',
+        node: 'XiaomicarLightGlass_Back_2_carLightGlass_Back_2_lambert210_D_Glass_0',
+        color: '#d90b37',
+        emissive: '#c9002f',
+        emissiveIntensity: 0.8,
+        metalness: 0.05,
+        roughness: 0.2,
+        removeColorMap: true,
+      },
+    ],
+    plates: [
+      {
+        id: 'front',
+        text: 'SU7 Ultra',
+        position: [-2.525, 0.505, 0] as const,
+        rotation: [0, -Math.PI / 2, 0] as const,
+        size: [0.52, 0.18] as const,
+        background: '#f1f1ec',
+        foreground: '#111214',
+      },
+      {
+        id: 'rear',
+        text: 'SU7 Ultra',
+        position: [2.455, 0.505, 0] as const,
+        rotation: [0, Math.PI / 2, 0] as const,
+        size: [0.52, 0.18] as const,
+        background: '#17191c',
+        foreground: '#c9c9c4',
+      },
+    ],
+  },
+  orbitActions: {
+    hero_front_left: {
+      position: [-6.25, 2.25, 4.6],
+      target: [0, 0.72, 0],
+      transitionMs: 450,
+    },
+    front: {
+      position: [-7.2, 1.65, 0],
+      target: [0, 0.72, 0],
+      transitionMs: 450,
+    },
+    driver_side: {
+      position: [0, 1.7, 7.1],
+      target: [0, 0.72, 0],
+      transitionMs: 450,
+    },
+    rear_three_quarter: {
+      position: [6.1, 2.15, -4.8],
+      target: [0, 0.72, 0],
+      transitionMs: 450,
+    },
+    turntable: {
+      position: [-5.8, 2.15, 5.8],
+      target: [0, 0.72, 0],
+      transitionMs: 450,
+      autoRotate: true,
+      autoRotateSpeed: 0.9,
+    },
+  } satisfies Record<OrbitPreset, OrbitActionDefinition>,
+} as const
+
+export type Su7ConceptPack = typeof su7ConceptPack

@@ -1,0 +1,54 @@
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import process from 'node:process'
+import { Box3, Matrix4, Quaternion, Vector3 } from 'three'
+
+const modelPath = path.resolve(process.argv[2] ?? 'public/assets/2025_xiaomi_su7_ultra.glb')
+const buffer = await fs.readFile(modelPath)
+const jsonLength = buffer.readUInt32LE(12)
+const document = JSON.parse(buffer.subarray(20, 20 + jsonLength).toString('utf8').replace(/\0+$/, ''))
+const box = new Box3().makeEmpty()
+const corners = Array.from({ length: 8 }, () => new Vector3())
+const visit = (nodeIndex, parentMatrix) => {
+  const node = document.nodes[nodeIndex]
+  const local = node.matrix
+    ? new Matrix4().fromArray(node.matrix)
+    : new Matrix4().compose(
+        new Vector3().fromArray(node.translation ?? [0, 0, 0]),
+        new Quaternion().fromArray(node.rotation ?? [0, 0, 0, 1]),
+        new Vector3().fromArray(node.scale ?? [1, 1, 1]),
+      )
+  const world = new Matrix4().multiplyMatrices(parentMatrix, local)
+  if (node.mesh !== undefined) {
+    for (const primitive of document.meshes[node.mesh].primitives) {
+      const accessor = document.accessors[primitive.attributes.POSITION]
+      if (!accessor?.min || !accessor?.max) continue
+      let cursor = 0
+      for (const x of [accessor.min[0], accessor.max[0]]) {
+        for (const y of [accessor.min[1], accessor.max[1]]) {
+          for (const z of [accessor.min[2], accessor.max[2]]) {
+            corners[cursor++].set(x, y, z).applyMatrix4(world)
+          }
+        }
+      }
+      corners.forEach((corner) => box.expandByPoint(corner))
+    }
+  }
+  node.children?.forEach((child) => visit(child, world))
+}
+const scene = document.scenes[document.scene ?? 0]
+scene.nodes.forEach((node) => visit(node, new Matrix4()))
+const size = box.getSize(new Vector3())
+const center = box.getCenter(new Vector3())
+const nodes = document.nodes.map((node, index) => ({
+  index,
+  name: node.name || '(unnamed)',
+  type: node.mesh === undefined ? 'Group' : 'Mesh',
+}))
+
+console.log(JSON.stringify({
+  file: modelPath,
+  nodeCount: nodes.length,
+  bounds: { min: box.min.toArray(), max: box.max.toArray(), size: size.toArray(), center: center.toArray() },
+  nodes,
+}, null, 2))

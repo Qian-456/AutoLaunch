@@ -2,21 +2,21 @@
 .SYNOPSIS
     AutoLaunch v0.1 · Xiaomi SU7 Ultra GLB 一键下载脚本
 .DESCRIPTION
-    将 Sketchfab 发布的 2025 Xiaomi SU7 Ultra Production Version
-    (Ddiaz Design, CC BY-NC-SA 4.0) 下载到 public/assets/su7_ultra.glb。
+    将 Sketchfab 发布的 2025 Xiaomi SU7 Ultra
+    (TechFreak, CC BY 4.0) 下载到 public/assets/2025_xiaomi_su7_ultra.glb。
     因 Sketchfab 下载接口需要浏览器登录态，脚本默认检查本地是否已有模型，
     若无则打开模型页面供用户手动下载，下载后放到脚本要求的路径即可。
 .NOTES
-    模型来源: https://sketchfab.com/3d-models/2025-xiaomi-su7-ultra-production-version-9d0a0a9285cb4ca59ccb9322ddf58d24
-    许可证 : CC BY-NC-SA 4.0 (非商业使用 + 署名 + 相同方式共享)
-    作者   : Ddiaz Design
+    模型来源: https://sketchfab.com/3d-models/2025-xiaomi-su7-ultra-19da48fdd841430b90046c7ed43b3cc8
+    许可证 : CC BY 4.0 (署名)
+    作者   : TechFreak
     合规   : 任何公开展示必须同时保留原作者、Sketchfab 来源、
-             CC BY-NC-SA 4.0 许可及"非官方概念演示"声明。
+             CC BY 4.0 许可及"非官方概念演示"声明。
 #>
 
 param(
-    [string]$TargetPath = "public\assets\su7_ultra.glb",
-    [string]$FallbackLocalPath = "su7_ultra.glb"
+    [string]$TargetPath = "public\assets\2025_xiaomi_su7_ultra.glb",
+    [string]$FallbackLocalPath = "2025_xiaomi_su7_ultra.glb"
 )
 
 $ErrorActionPreference = "Stop"
@@ -42,7 +42,7 @@ if (Test-Path $TargetPath) {
     exit 0
 }
 
-# 3. 回退：若根目录已有 su7_ultra.glb（用户手动放的），直接复制
+# 3. 回退：若根目录已有 2025_xiaomi_su7_ultra.glb（用户手动放的），直接复制
 if (Test-Path $FallbackLocalPath) {
     $Size = (Get-Item $FallbackLocalPath).Length / 1MB
     Write-Host "[Copy] 发现根目录 $FallbackLocalPath ( $([math]::Round($Size, 2)) MB )" -ForegroundColor Cyan
@@ -53,7 +53,7 @@ if (Test-Path $FallbackLocalPath) {
 }
 
 # 4. 无法自动下载：提示用户操作
-$ModelUrl = "https://sketchfab.com/3d-models/2025-xiaomi-su7-ultra-production-version-9d0a0a9285cb4ca59ccb9322ddf58d24#download"
+$ModelUrl = "https://sketchfab.com/3d-models/2025-xiaomi-su7-ultra-19da48fdd841430b90046c7ed43b3cc8#download"
 
 Write-Host "[!] 当前无法自动下载 Sketchfab 资源（需浏览器登录态）。" -ForegroundColor Magenta
 Write-Host ""
@@ -65,7 +65,7 @@ Write-Host ""
 Write-Host "  2) 点击右侧 Download 按钮，下载 glTF Binary (.glb) 文件。"
 Write-Host ""
 Write-Host "  3) 将下载得到的 .glb 文件："
-Write-Host "     - 方案 A（推荐，脚本下次自动处理）：放到项目根目录并命名为 su7_ultra.glb，然后重新运行本脚本。"
+Write-Host "     - 方案 A（推荐，脚本下次自动处理）：放到项目根目录并命名为 2025_xiaomi_su7_ultra.glb，然后重新运行本脚本。"
 Write-Host "     - 方案 B（直接）：直接拷贝到 $TargetPath"
 Write-Host ""
 

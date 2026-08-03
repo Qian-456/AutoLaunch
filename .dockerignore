@@ -1,0 +1,10 @@
+.git
+.venv
+node_modules
+dist
+recordings
+2025-xiaomi-su7-ultra
+*.glb
+!public/assets/2025_xiaomi_su7_ultra.glb
+*.fbx
+*.log
