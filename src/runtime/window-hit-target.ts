@@ -1,0 +1,75 @@
+import type { Object3D } from 'three'
+import { WINDOW_TARGETS } from '../pack/su7-concept.pack'
+import type { WindowTarget } from '../types'
+
+type ConcreteWindowTarget = Exclude<WindowTarget, 'all'>
+
+export type VehicleHitTarget =
+  | { type: 'window'; target: ConcreteWindowTarget }
+  | { type: 'lights'; target: 'headlight' | 'taillight' }
+  | { type: 'trunk' }
+
+/**
+ * Resolve a raycast hit back to a semantic window target. The raycaster may
+ * return a child mesh, so walk upward until a Product Pack node-map name is
+ * found. Generic runtime code never embeds a model-specific GLB node name.
+ */
+export function resolveWindowTargetFromHit(
+  object: Object3D,
+  nodeMap: Readonly<Record<string, string>>,
+): ConcreteWindowTarget | null {
+  let cursor: Object3D | null = object
+  while (cursor) {
+    const proxyTarget = cursor.userData.windowTarget as ConcreteWindowTarget | undefined
+    if (proxyTarget && WINDOW_TARGETS.includes(proxyTarget)) return proxyTarget
+    for (const target of WINDOW_TARGETS) {
+      if (cursor.name === nodeMap[`window_${target}`]) return target
+    }
+    cursor = cursor.parent
+  }
+  return null
+}
+
+function lineageContainsMappedNode(
+  object: Object3D,
+  semanticIds: readonly string[],
+  nodeMap: Readonly<Record<string, string>>,
+): boolean {
+  const names = new Set(semanticIds.map((semanticId) => nodeMap[semanticId]).filter(Boolean))
+  let cursor: Object3D | null = object
+  while (cursor) {
+    if (names.has(cursor.name)) return true
+    cursor = cursor.parent
+  }
+  return false
+}
+
+/** Resolve all directly clickable registered vehicle parts from one raycast hit. */
+export function resolveVehicleTargetFromHit(
+  object: Object3D,
+  nodeMap: Readonly<Record<string, string>>,
+  hatchNodeIds: readonly string[],
+): VehicleHitTarget | null {
+  let cursor: Object3D | null = object
+  while (cursor) {
+    const directTarget = cursor.userData.vehicleHitTarget as 'headlight' | 'taillight' | undefined
+    if (directTarget) return { type: 'lights', target: directTarget }
+    cursor = cursor.parent
+  }
+  const windowTarget = resolveWindowTargetFromHit(object, nodeMap)
+  if (windowTarget) return { type: 'window', target: windowTarget }
+  if (lineageContainsMappedNode(object, ['headlight_left', 'headlight_right'], nodeMap)) {
+    return { type: 'lights', target: 'headlight' }
+  }
+  if (lineageContainsMappedNode(object, [
+    'taillight_left',
+    'taillight_right',
+    'trunk_taillight_lens',
+    'trunk_taillight_housing',
+    'trunk_taillight_emitter',
+  ], nodeMap)) {
+    return { type: 'lights', target: 'taillight' }
+  }
+  if (lineageContainsMappedNode(object, ['trunk', ...hatchNodeIds], nodeMap)) return { type: 'trunk' }
+  return null
+}

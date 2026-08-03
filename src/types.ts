@@ -44,6 +44,18 @@ export type LightsAction = {
 
 export type VehicleAction = OrbitAction | WindowAction | HatchAction | TrunkAction | LightsAction
 
+export type LaunchChapter = {
+  id: string
+  title: string
+  narration: string
+  durationMs: number
+  camera: OrbitPreset
+  actions: readonly {
+    atMs: number
+    action: Exclude<VehicleAction, OrbitAction>
+  }[]
+}
+
 export type VehiclePartId =
   | 'window_driver_front'
   | 'window_passenger_front'

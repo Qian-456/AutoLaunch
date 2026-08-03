@@ -4,6 +4,8 @@ import { dispatchVehicleAction } from '../runtime/action-dispatcher'
 import { useExperienceStore } from '../store/experience-store'
 import { su7ConceptPack } from '../pack/su7-concept.pack'
 import type { WindowTarget } from '../types'
+import { Object3D } from 'three'
+import { resolveVehicleTargetFromHit, resolveWindowTargetFromHit } from '../runtime/window-hit-target'
 
 describe('registered VehicleAction pipeline', () => {
   beforeEach(() => {
@@ -167,7 +169,8 @@ describe('registered VehicleAction pipeline', () => {
   it('routes trunk actions to the registered real multi-mesh hatch', () => {
     const result = dispatchVehicleAction({ type: 'trunk', open: true })
     expect(result.ok).toBe(true)
-    expect(useExperienceStore.getState().activeOrbitPreset).toBe('rear_three_quarter')
+    expect(useExperienceStore.getState().activeOrbitPreset).toBe('hero_front_left')
+    expect(useExperienceStore.getState().orbitRequestId).toBe(0)
     expect(su7ConceptPack.nodeMap.trunk).toBe(su7ConceptPack.nodeMap.trunk_outer_upper)
     expect(su7ConceptPack.actions.hatch_rear.movingNodeIds).toEqual([
       'trunk_outer_upper',
@@ -183,6 +186,17 @@ describe('registered VehicleAction pipeline', () => {
     expect(su7ConceptPack.nodeMap.trunk_taillight_lens).toBe(su7ConceptPack.nodeMap.taillight_right)
     expect(su7ConceptPack.actions.hatch_rear.movingNodeIds).not.toContain('taillight_left')
     expect(su7ConceptPack.actions.trunk.mode).toBe('real-mesh')
+  })
+
+  it('keeps the current camera when lights or registered parts are operated', () => {
+    useExperienceStore.getState().requestOrbit('driver_side')
+    const requestId = useExperienceStore.getState().orbitRequestId
+    dispatchVehicleAction({ type: 'lights', target: 'taillight', on: true })
+    dispatchVehicleAction({ type: 'trunk', open: true })
+    dispatchVehicleAction({ type: 'window', target: 'driver_front', open: true, progress: 100 })
+
+    expect(useExperienceStore.getState().activeOrbitPreset).toBe('driver_side')
+    expect(useExperienceStore.getState().orbitRequestId).toBe(requestId)
   })
 
   it('reverses the real hatch smoothly through the rear conflict group', () => {
@@ -213,6 +227,60 @@ describe('registered VehicleAction pipeline', () => {
     useExperienceStore.getState().setStageMode('launch')
     expect(useExperienceStore.getState().stageMode).toBe('launch')
     expect(useExperienceStore.getState().activeActions.size).toBe(0)
+  })
+
+  it('registers a real 90-second four-chapter launch script', () => {
+    expect(su7ConceptPack.launchScript).toHaveLength(4)
+    expect(su7ConceptPack.launchScript.reduce((sum, chapter) => sum + chapter.durationMs, 0)).toBe(90_000)
+    expect(su7ConceptPack.launchScript.map((chapter) => chapter.camera)).toEqual([
+      'front',
+      'driver_side',
+      'rear_three_quarter',
+      'turntable',
+    ])
+    expect(su7ConceptPack.launchScript.some((chapter) => chapter.actions.some(({ action }) => action.type === 'trunk'))).toBe(true)
+  })
+
+  it('maps a clicked child mesh back to its Product Pack window target', () => {
+    const windowNode = new Object3D()
+    windowNode.name = su7ConceptPack.nodeMap.window_driver_front
+    const raycastChild = new Object3D()
+    windowNode.add(raycastChild)
+
+    expect(resolveWindowTargetFromHit(raycastChild, su7ConceptPack.nodeMap)).toBe('driver_front')
+    expect(resolveWindowTargetFromHit(new Object3D(), su7ConceptPack.nodeMap)).toBeNull()
+  })
+
+  it('keeps the closed window aperture clickable after the glass moves away', () => {
+    const fixedHitTarget = new Object3D()
+    fixedHitTarget.userData.windowTarget = 'driver_front'
+    expect(resolveVehicleTargetFromHit(
+      fixedHitTarget,
+      su7ConceptPack.nodeMap,
+      su7ConceptPack.actions.hatch_rear.movingNodeIds,
+    )).toEqual({ type: 'window', target: 'driver_front' })
+  })
+
+  it('maps registered headlight, taillight and hatch meshes to direct-click targets', () => {
+    const headlight = new Object3D()
+    headlight.name = su7ConceptPack.nodeMap.headlight_left
+    const taillight = new Object3D()
+    taillight.name = su7ConceptPack.nodeMap.taillight_left
+    const hatch = new Object3D()
+    hatch.name = su7ConceptPack.nodeMap.trunk_outer_upper
+    const movingIds = su7ConceptPack.actions.hatch_rear.movingNodeIds
+
+    expect(resolveVehicleTargetFromHit(headlight, su7ConceptPack.nodeMap, movingIds)).toEqual({ type: 'lights', target: 'headlight' })
+    expect(resolveVehicleTargetFromHit(taillight, su7ConceptPack.nodeMap, movingIds)).toEqual({ type: 'lights', target: 'taillight' })
+    expect(resolveVehicleTargetFromHit(hatch, su7ConceptPack.nodeMap, movingIds)).toEqual({ type: 'trunk' })
+  })
+
+  it('uses the corrected driver/passenger side node mapping', () => {
+    expect(su7ConceptPack.nodeMap.window_driver_front).toContain('Side_2')
+    expect(su7ConceptPack.nodeMap.window_passenger_front).toContain('Side_1')
+    expect(su7ConceptPack.nodeMap.window_driver_rear).toContain('Side_1')
+    expect(su7ConceptPack.nodeMap.window_passenger_rear).toContain('Side_2')
+    expect(su7ConceptPack.orbitActions.driver_side.position[2]).toBeGreaterThan(0)
   })
 
   it('keeps model-specific corrections and vehicle actions inside the Product Pack', () => {

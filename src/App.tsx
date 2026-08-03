@@ -3,6 +3,7 @@ import { Canvas } from '@react-three/fiber'
 import { useProgress } from '@react-three/drei'
 import { ACESFilmicToneMapping, SRGBColorSpace } from 'three'
 import { Experience } from './components/Experience'
+import { LaunchPlayer } from './components/LaunchPlayer'
 import { su7ConceptPack, WINDOW_LABELS, WINDOW_TARGETS } from './pack/su7-concept.pack'
 import { parseCommand } from './runtime/command-parser'
 import { dispatchVehicleAction } from './runtime/action-dispatcher'
@@ -17,6 +18,8 @@ const orbitButtons: Array<{ preset: OrbitPreset; label: string }> = [
   { preset: 'rear_three_quarter', label: '车尾' },
   { preset: 'turntable', label: '360°' },
 ]
+
+const commandExamples = ['打开主驾车窗', '副驾车窗50%', '打开后备箱', '开灯'] as const
 
 const singleVehicleControls: Array<{
   id: 'trunk' | 'headlight' | 'taillight'
@@ -60,12 +63,15 @@ class SceneErrorBoundary extends Component<{ children: ReactNode }, { failed: bo
 export function App() {
   const [command, setCommand] = useState('')
   const [isCommandDrawerOpen, setIsCommandDrawerOpen] = useState(false)
+  const [isControlPanelOpen, setIsControlPanelOpen] = useState(false)
+  const [isRecordingView, setIsRecordingView] = useState(false)
   const [feedback, setFeedback] = useState('拖动车身区域可自由旋转 · 滚轮缩放 · 文字可输入：主驾车窗50%')
   const { progress: loadingProgress } = useProgress()
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null)
   const modelStatus = useExperienceStore((state) => state.modelStatus)
   const stageMode = useExperienceStore((state) => state.stageMode)
   const activeOrbitPreset = useExperienceStore((state) => state.activeOrbitPreset)
+  const manualOrbit = useExperienceStore((state) => state.manualOrbit)
   const notice = useExperienceStore((state) => state.notice)
   const voiceState = useExperienceStore((state) => state.inputMode.voice)
   const windowProgress = useExperienceStore((state) => state.windowProgress)
@@ -84,11 +90,17 @@ export function App() {
   const setStageMode = useExperienceStore((state) => state.setStageMode)
 
   const runOrbit = useCallback((preset: OrbitPreset) => {
+    if (useExperienceStore.getState().stageMode === 'launch') {
+      useExperienceStore.getState().setStageMode('studio')
+    }
     const result = dispatchVehicleAction({ type: 'orbit', preset })
     setFeedback(result.message)
   }, [])
 
   const runVehicleAction = useCallback((action: Exclude<VehicleAction, { type: 'orbit' }>) => {
+    if (useExperienceStore.getState().stageMode === 'launch') {
+      useExperienceStore.getState().setStageMode('studio')
+    }
     const result = dispatchVehicleAction(action)
     setFeedback(result.message)
   }, [])
@@ -99,10 +111,61 @@ export function App() {
       setFeedback(parsed.suggestion)
       return
     }
+    if (useExperienceStore.getState().stageMode === 'launch') {
+      useExperienceStore.getState().setStageMode('studio')
+    }
     const result = dispatchVehicleAction(parsed.action)
     setFeedback(result.message)
     if (clearAfter) setCommand('')
   }, [])
+
+  const toggleLaunchMode = useCallback(() => {
+    if (useExperienceStore.getState().stageMode === 'launch') {
+      setStageMode('studio')
+      setFeedback('发布会已停止，控制权已交还给您')
+      return
+    }
+    setIsControlPanelOpen(false)
+    setIsCommandDrawerOpen(false)
+    useExperienceStore.getState().requestOrbit(su7ConceptPack.launchScript[0].camera)
+    setStageMode('launch')
+    setFeedback('发布会已开始 · 拖动镜头或点击车窗可随时接管')
+  }, [setStageMode])
+
+  const finishLaunch = useCallback(() => {
+    setFeedback('演示完成，您可以退出发布会模式继续自由体验')
+  }, [])
+
+  const enterRecordingView = useCallback(async () => {
+    setIsControlPanelOpen(false)
+    setIsCommandDrawerOpen(false)
+    setIsRecordingView(true)
+    try {
+      if (!document.fullscreenElement) await document.documentElement.requestFullscreen()
+    } catch {
+      setFeedback('浏览器未允许全屏，已进入纯净界面；可按 F11 隐藏浏览器边框')
+    }
+  }, [])
+
+  const exitRecordingView = useCallback(async () => {
+    setIsRecordingView(false)
+    if (document.fullscreenElement) await document.exitFullscreen().catch(() => undefined)
+  }, [])
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement) setIsRecordingView(false)
+    }
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
+  }, [])
+
+  useEffect(() => {
+    if (stageMode === 'launch' && manualOrbit) {
+      setStageMode('studio')
+      setFeedback('您已拖动镜头并接管演示；发布会不会自动恢复')
+    }
+  }, [manualOrbit, setStageMode, stageMode])
 
   useEffect(() => {
     const recognition = createBrowserSpeechRecognition()
@@ -169,23 +232,26 @@ export function App() {
   }
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell${isRecordingView ? ' app-shell--recording' : ''}`}>
       <header className="topbar">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true" />
           <div>
             <p>AUTOLAUNCH / PRODUCT VIEW</p>
-            <h1>2025 SU7 ULTRA · 四车窗进度控制</h1>
+            <h1>2025 SU7 ULTRA · 交互式数字展车</h1>
           </div>
         </div>
         <div className="topbar-actions">
           <button
             className={`stage-mode-button${stageMode === 'launch' ? ' active' : ''}`}
             type="button"
-            onClick={() => setStageMode(stageMode === 'launch' ? 'studio' : 'launch')}
+            onClick={toggleLaunchMode}
           >
             <span aria-hidden="true" />
-            {stageMode === 'launch' ? '退出发布会展位' : '发布会模式'}
+            {stageMode === 'launch' ? '停止发布会' : '开始发布会'}
+          </button>
+          <button className="recording-view-button" type="button" onClick={enterRecordingView}>
+            纯净录制
           </button>
           <div className={`model-state model-state--${modelStatus}`}>
             <span />
@@ -215,7 +281,7 @@ export function App() {
 
         <div className="hero-copy">
           <p className="eyebrow">PERFORMANCE, REFRAMED</p>
-          <p>四车窗独立 0-100% 控制 · 文字/语音可指定具体进度</p>
+          <p>点击真实车窗直接开合 · 拖动镜头自由观察</p>
         </div>
 
         {modelStatus === 'loading' && (
@@ -229,11 +295,27 @@ export function App() {
 
         {notice && <div className="notice">{notice}</div>}
 
+        <LaunchPlayer active={stageMode === 'launch' && modelStatus === 'ready'} onFinished={finishLaunch} />
+
+        {isRecordingView && (
+          <button className="recording-view-exit" type="button" onClick={exitRecordingView}>
+            退出纯净录制
+          </button>
+        )}
+
         <div className="control-deck">
-          <section className="vehicle-quickbar" aria-label="车辆快捷控制">
+          <button
+            className={`control-deck__launcher${isControlPanelOpen ? ' active' : ''}`}
+            type="button"
+            aria-expanded={isControlPanelOpen}
+            onClick={() => setIsControlPanelOpen((open) => !open)}
+          >
+            {isControlPanelOpen ? '收起控制' : '车辆控制'}
+          </button>
+          <section className={`vehicle-quickbar${isControlPanelOpen ? ' vehicle-quickbar--open' : ''}`} aria-label="车辆控制" aria-hidden={!isControlPanelOpen}>
             <div className="deck-heading">
-              <span>QUICK CONTROL</span>
-              <strong>四车窗控制 · 点击按钮 = 全开/全关</strong>
+              <span>车窗</span>
+              <strong>也可以直接点击车上的玻璃</strong>
             </div>
             <div className="vehicle-buttons vehicle-buttons--windows">
               {WINDOW_TARGETS.map((target) => {
@@ -269,8 +351,8 @@ export function App() {
               })}
             </div>
             <div className="deck-heading" style={{ marginTop: 12 }}>
-              <span>BULK / PARTS</span>
-              <strong>批量车窗 + 后备箱 + 灯光</strong>
+              <span>其他部件</span>
+              <strong>批量车窗 · 尾门 · 灯光</strong>
             </div>
             <div className="vehicle-buttons">
               <button
@@ -334,17 +416,17 @@ export function App() {
             onClick={() => setIsCommandDrawerOpen((open) => !open)}
           >
             <span aria-hidden="true">{isCommandDrawerOpen ? '⌄' : '⌃'}</span>
-            文字 / 语音控制（支持具体进度，如：主驾车窗50%）
+            文字 / 语音
           </button>
           <div className="interaction-bar" id="command-drawer-content" aria-hidden={!isCommandDrawerOpen}>
             <form onSubmit={submitCommand}>
-              <label htmlFor="camera-command">统一 VehicleAction 控制 · 支持 0-100% 进度</label>
+              <label htmlFor="camera-command">输入车辆指令</label>
               <div>
                 <input
                   id="camera-command"
                   value={command}
                   onChange={(event) => setCommand(event.target.value)}
-                  placeholder="试试：打开主驾车窗 / 副驾车窗30% / 全部车窗50% / 打开后备箱 / 开灯"
+                  placeholder="例如：主驾车窗50% / 打开后备箱 / 开灯"
                   tabIndex={isCommandDrawerOpen ? 0 : -1}
                 />
                 <button
@@ -356,15 +438,19 @@ export function App() {
                   onClick={toggleVoice}
                   tabIndex={isCommandDrawerOpen ? 0 : -1}
                 >
-                  {voiceState === 'listening' ? '●' : '🎙'}
+                  {voiceState === 'listening' ? '● 识别中' : '🎙 语音'}
                 </button>
                 <button type="submit" tabIndex={isCommandDrawerOpen ? 0 : -1}>执行</button>
               </div>
+              <div className="command-examples" aria-label="示例指令">
+                {commandExamples.map((example) => (
+                  <button key={example} type="button" onClick={() => runCommandText(example)} tabIndex={isCommandDrawerOpen ? 0 : -1}>
+                    {example}
+                  </button>
+                ))}
+              </div>
             </form>
             <p>{feedback}</p>
-            <p className="interaction-bar__examples">
-              示例：打开副驾车窗 · 主驾后窗70% · 全部车窗关闭 · 打开后备箱
-            </p>
           </div>
         </div>
       </section>

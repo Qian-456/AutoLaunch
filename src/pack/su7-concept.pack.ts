@@ -1,4 +1,4 @@
-import type { OrbitActionDefinition, OrbitPreset, WindowTarget } from '../types'
+import type { LaunchChapter, OrbitActionDefinition, OrbitPreset, WindowTarget } from '../types'
 
 /**
  * Per-window action definition.
@@ -84,10 +84,10 @@ export const su7ConceptPack = {
   },
   nodeMap: {
     body: 'CarPaint1',
-    window_driver_front: 'XiaomicarGlass_front_2_Side_1_carGlass_front_2_Side_1_Car_glass',
-    window_passenger_front: 'XiaomicarGlass_front_2_Side_2_carGlass_front_2_Side_2_Car_glass',
-    window_driver_rear: 'XiaomicarGlass_back_2_Side_2_carGlass_back_2_Side_2_Car_glass',
-    window_passenger_rear: 'XiaomicarGlass_back_2_Side_1_carGlass_back_2_Side_1_Car_glass',
+    window_driver_front: 'XiaomicarGlass_front_2_Side_2_carGlass_front_2_Side_2_Car_glass',
+    window_passenger_front: 'XiaomicarGlass_front_2_Side_1_carGlass_front_2_Side_1_Car_glass',
+    window_driver_rear: 'XiaomicarGlass_back_2_Side_1_carGlass_back_2_Side_1_Car_glass',
+    window_passenger_rear: 'XiaomicarGlass_back_2_Side_2_carGlass_back_2_Side_2_Car_glass',
     trunk: 'XiaomicarPaint_8_carPaint_8_pasted__lambert222_001',
     trunk_outer_upper: 'XiaomicarPaint_8_carPaint_8_pasted__lambert222_001',
     trunk_outer_lip: 'XiaomicarPaint_2_carPaint_2_pasted__lambert222_001',
@@ -541,7 +541,7 @@ export const su7ConceptPack = {
       transitionMs: 450,
     },
     driver_side: {
-      position: [0, 1.7, -7.1],
+      position: [0, 1.7, 7.1],
       target: [0, 0.72, 0],
       transitionMs: 450,
     },
@@ -558,6 +558,54 @@ export const su7ConceptPack = {
       autoRotateSpeed: 2.25,
     },
   } satisfies Record<OrbitPreset, OrbitActionDefinition>,
+  launchScript: [
+    {
+      id: 'front-design',
+      title: '前脸与智能灯光',
+      narration: '从低趴前脸开始，点亮数字展车的第一束光。',
+      durationMs: 15_000,
+      camera: 'front',
+      actions: [
+        { atMs: 2_000, action: { type: 'lights', target: 'headlight', on: true } },
+      ],
+    },
+    {
+      id: 'frameless-windows',
+      title: '无框车窗交互',
+      narration: '来到主驾侧，展示真实车窗 Mesh 的独立升降。',
+      durationMs: 20_000,
+      camera: 'driver_side',
+      actions: [
+        { atMs: 2_000, action: { type: 'window', target: 'driver_front', open: true, progress: 100 } },
+        { atMs: 10_000, action: { type: 'window', target: 'driver_front', open: false, progress: 0 } },
+      ],
+    },
+    {
+      id: 'rear-hatch',
+      title: '真实尾门组合动画',
+      narration: '尾门外壳、内衬、尾翼支架与中央尾灯围绕同一铰链协同运动。',
+      durationMs: 25_000,
+      camera: 'rear_three_quarter',
+      actions: [
+        { atMs: 2_000, action: { type: 'lights', target: 'taillight', on: true } },
+        { atMs: 2_000, action: { type: 'trunk', open: true } },
+        { atMs: 14_000, action: { type: 'trunk', open: false } },
+      ],
+    },
+    {
+      id: 'interactive-finale',
+      title: '随时接管的数字发布会',
+      narration: '所有入口统一为 VehicleAction，用户可以拖动镜头或点击车窗随时接管。',
+      durationMs: 30_000,
+      camera: 'turntable',
+      actions: [
+        { atMs: 3_000, action: { type: 'window', target: 'all', open: true, progress: 100 } },
+        { atMs: 12_000, action: { type: 'window', target: 'all', open: false, progress: 0 } },
+        { atMs: 18_000, action: { type: 'lights', target: 'headlight', on: false } },
+        { atMs: 20_000, action: { type: 'lights', target: 'taillight', on: false } },
+      ],
+    },
+  ] satisfies readonly LaunchChapter[],
 } as const
 
 export type Su7ConceptPack = typeof su7ConceptPack

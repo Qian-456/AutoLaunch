@@ -61,8 +61,10 @@ test-results/
 *.stl
 
 # public/assets 中的二进制模型文件（保留 README / pack.json / node-map 等 JSON 配置）
-public/assets/*.glb
-public/assets/*.gltf
+# 注意：如果通过 Git 仓库部署到 Vercel，请将 su7_ultra.glb 从忽略中移除，
+# 或使用 Git LFS / Vercel CLI 本地部署方式。
+# public/assets/*.glb
+# public/assets/*.gltf
 public/assets/*.fbx
 public/assets/*.hdr
 public/assets/*.bin

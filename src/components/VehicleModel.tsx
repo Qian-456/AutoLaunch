@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useGLTF } from '@react-three/drei'
-import { useFrame, useThree } from '@react-three/fiber'
-import { BoxGeometry, Color, Group, MathUtils, Mesh, MeshStandardMaterial, Object3D } from 'three'
+import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
+import { Box3, BoxGeometry, Color, Group, MathUtils, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, Vector3 } from 'three'
 import { SkeletonUtils } from 'three/examples/jsm/Addons.js'
 import {
   HatchActionDefinition,
@@ -12,6 +12,8 @@ import {
 } from '../pack/su7-concept.pack'
 import { useExperienceStore } from '../store/experience-store'
 import type { ActiveVehicleAction, WindowTarget } from '../types'
+import { dispatchVehicleAction } from '../runtime/action-dispatcher'
+import { resolveVehicleTargetFromHit } from '../runtime/window-hit-target'
 import { VehicleLightEffects } from './VehicleLightEffects'
 import { VehiclePlate } from './VehiclePlate'
 
@@ -189,6 +191,78 @@ function buildWindowRefs(
 }
 
 /**
+ * Keep an invisible raycast surface at every closed window aperture. The real
+ * glass moves into the door when opened, but the user must still be able to
+ * click the same aperture to close it again.
+ */
+function buildWindowHitTargets(scene: Object3D, vehicleRoot: Group): Mesh[] {
+  scene.updateWorldMatrix(true, true)
+  vehicleRoot.updateWorldMatrix(true, true)
+  const targets: Mesh[] = []
+  for (const target of WINDOW_TARGETS) {
+    const node = scene.getObjectByName(su7ConceptPack.nodeMap[`window_${target}`])
+    if (!node) continue
+    const bounds = new Box3().setFromObject(node)
+    if (bounds.isEmpty()) continue
+    const size = bounds.getSize(new Vector3())
+    const center = vehicleRoot.worldToLocal(bounds.getCenter(new Vector3()))
+    const geometry = new BoxGeometry(
+      Math.max(size.x, 0.06),
+      Math.max(size.y, 0.06),
+      Math.max(size.z, 0.06),
+    )
+    const material = new MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })
+    material.colorWrite = false
+    const proxy = new Mesh(geometry, material)
+    proxy.name = `WindowHitTarget_${target}`
+    proxy.position.copy(center)
+    proxy.userData.windowTarget = target
+    proxy.castShadow = false
+    proxy.receiveShadow = false
+    proxy.frustumCulled = false
+    vehicleRoot.add(proxy)
+    targets.push(proxy)
+  }
+  return targets
+}
+
+/** Transparent, slightly outward-offset lamp lenses win raycasts over bodywork. */
+function buildLightHitTargets(scene: Object3D, vehicleRoot: Group): Mesh[] {
+  scene.updateWorldMatrix(true, true)
+  vehicleRoot.updateWorldMatrix(true, true)
+  const specs = [
+    { semanticId: 'headlight_left', target: 'headlight', outwardX: -0.05 },
+    { semanticId: 'headlight_right', target: 'headlight', outwardX: -0.05 },
+    { semanticId: 'taillight_left', target: 'taillight', outwardX: 0.05 },
+    { semanticId: 'taillight_right', target: 'taillight', outwardX: 0.05 },
+  ] as const
+  const targets: Mesh[] = []
+  for (const spec of specs) {
+    const node = scene.getObjectByName(su7ConceptPack.nodeMap[spec.semanticId])
+    if (!node) continue
+    const bounds = new Box3().setFromObject(node)
+    if (bounds.isEmpty()) continue
+    const size = bounds.getSize(new Vector3())
+    const worldCenter = bounds.getCenter(new Vector3())
+    worldCenter.x += spec.outwardX
+    const center = vehicleRoot.worldToLocal(worldCenter)
+    const geometry = new BoxGeometry(size.x + 0.08, size.y + 0.06, size.z + 0.06)
+    const material = new MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })
+    material.colorWrite = false
+    const proxy = new Mesh(geometry, material)
+    proxy.name = `LightHitTarget_${spec.semanticId}`
+    proxy.position.copy(center)
+    proxy.userData.vehicleHitTarget = spec.target
+    proxy.castShadow = false
+    proxy.receiveShadow = false
+    proxy.frustumCulled = false
+    vehicleRoot.add(proxy)
+    targets.push(proxy)
+  }
+  return targets
+}
+
+/**
  * Convert a normalized progress (0..100) into the absolute world-space position
  * for the declared axis by interpolating the pack's closedOffset / openOffset.
  */
@@ -254,7 +328,10 @@ export function VehicleModel() {
   const scene = useMemo(() => SkeletonUtils.clone(gltf.scene), [gltf.scene])
   const vehicleRoot = useRef<Group>(null)
   const windowRefs = useRef<Record<Exclude<WindowTarget, 'all'>, WindowNodeRefs> | null>(null)
+  const windowHitTargets = useRef<Mesh[]>([])
+  const lightHitTargets = useRef<Mesh[]>([])
   const hatchRefs = useRef<HatchNodeRefs | null>(null)
+  const handledClickEvent = useRef<Event | null>(null)
   const vehicleClosedY = useRef(0)
   const runtimeAnimations = useRef(new Map<string, RuntimeAnimation>())
   const activeActions = useExperienceStore((state) => state.activeActions)
@@ -262,6 +339,50 @@ export function VehicleModel() {
   const setNotice = useExperienceStore((state) => state.setNotice)
   const requestOrbit = useExperienceStore((state) => state.requestOrbit)
   const finishAction = useExperienceStore((state) => state.finishAction)
+
+  const resolveClickedPart = useCallback(
+    (object: Object3D) => resolveVehicleTargetFromHit(
+      object,
+      su7ConceptPack.nodeMap,
+      su7ConceptPack.actions.hatch_rear.movingNodeIds,
+    ),
+    [],
+  )
+
+  const handleVehiclePointerMove = useCallback((event: ThreeEvent<PointerEvent>) => {
+    renderer.domElement.style.cursor = resolveClickedPart(event.object) ? 'pointer' : 'grab'
+  }, [renderer, resolveClickedPart])
+
+  const handleVehicleClick = useCallback((event: ThreeEvent<MouseEvent>) => {
+    if (event.delta > 4) return
+    const hit = resolveClickedPart(event.object)
+    if (!hit) return
+    if (handledClickEvent.current === event.nativeEvent) return
+    handledClickEvent.current = event.nativeEvent
+    event.stopPropagation()
+    const state = useExperienceStore.getState()
+    if (state.stageMode === 'launch') state.setStageMode('studio')
+    if (hit.type === 'window') {
+      const isOpen = (state.windowProgress.get(hit.target) ?? 0) > 0
+      const result = dispatchVehicleAction({
+        type: 'window',
+        target: hit.target,
+        open: !isOpen,
+        progress: isOpen ? 0 : 100,
+      })
+      state.setNotice(`${WINDOW_LABELS[hit.target]} · ${result.message}`)
+      return
+    }
+    if (hit.type === 'lights') {
+      const isOn = state.lightStates.get(hit.target) ?? false
+      const result = dispatchVehicleAction({ type: 'lights', target: hit.target, on: !isOn })
+      state.setNotice(`${hit.target === 'headlight' ? '大灯' : '尾灯'} · ${result.message}`)
+      return
+    }
+    const isOpen = state.vehiclePartStates.get('trunk') === 'open'
+    const result = dispatchVehicleAction({ type: 'trunk', open: !isOpen })
+    state.setNotice(`后备箱 · ${result.message}`)
+  }, [resolveClickedPart])
 
 
   useEffect(() => {
@@ -338,12 +459,26 @@ export function VehicleModel() {
 
     if (vehicleRoot.current) {
       windowRefs.current = buildWindowRefs(scene, vehicleRoot.current)
+      windowHitTargets.current = buildWindowHitTargets(scene, vehicleRoot.current)
+      lightHitTargets.current = buildLightHitTargets(scene, vehicleRoot.current)
       hatchRefs.current = buildHatchRefs(scene)
       vehicleClosedY.current = vehicleRoot.current.position.y
       ;(globalThis as unknown as { __AUDIT_WINDOW_REFS__: typeof windowRefs.current }).__AUDIT_WINDOW_REFS__ = windowRefs.current
       ;(globalThis as unknown as { __AUDIT_HATCH_REFS__: HatchNodeRefs | null }).__AUDIT_HATCH_REFS__ = hatchRefs.current
     }
     setModelStatus('ready')
+    return () => {
+      ;[...windowHitTargets.current, ...lightHitTargets.current].forEach((target) => {
+        target.removeFromParent()
+        target.geometry.dispose()
+        const material = target.material
+        if (Array.isArray(material)) material.forEach((item) => item.dispose())
+        else material.dispose()
+      })
+      windowHitTargets.current = []
+      lightHitTargets.current = []
+      renderer.domElement.style.cursor = 'grab'
+    }
   }, [renderer, scene, setModelStatus, setNotice])
 
   useEffect(() => {
@@ -559,7 +694,12 @@ export function VehicleModel() {
   })
 
   return (
-    <group ref={vehicleRoot}>
+    <group
+      ref={vehicleRoot}
+      onPointerMove={handleVehiclePointerMove}
+      onPointerOut={() => { renderer.domElement.style.cursor = 'grab' }}
+      onClick={handleVehicleClick}
+    >
       <primitive
         object={scene}
         scale={su7ConceptPack.model.scale}

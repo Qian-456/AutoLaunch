@@ -163,11 +163,6 @@ function dispatchSingle(action: Exclude<VehicleAction, { type: 'orbit' }>): Disp
   const execution = buildExecution(action)
   state.startAction(execution)
 
-  if (action.type === 'trunk' || action.type === 'hatch') {
-    // Move to the registered rear camera so the real tailgate motion remains visible.
-    useExperienceStore.getState().requestOrbit('rear_three_quarter')
-  }
-
   return { ok: true, message: `${labelOf(action)}：动作已开始`, actionId: execution.id }
 }
 
