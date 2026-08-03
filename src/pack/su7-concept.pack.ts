@@ -390,7 +390,7 @@ export const su7ConceptPack = {
       target: [0, 0.72, 0],
       transitionMs: 450,
       autoRotate: true,
-      autoRotateSpeed: 0.9,
+      autoRotateSpeed: 2.25,
     },
   } satisfies Record<OrbitPreset, OrbitActionDefinition>,
 } as const

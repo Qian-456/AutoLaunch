@@ -12,6 +12,7 @@ import type {
 type ActionOutcome = { id: string; status: ActionTerminalStatus } | null
 
 type ExperienceState = {
+  stageMode: 'studio' | 'launch'
   cameraControlOwner: 'script' | 'orbit'
   activeOrbitPreset: OrbitPreset
   orbitRequestId: number
@@ -23,6 +24,7 @@ type ExperienceState = {
   lightStates: Map<LightPartId, boolean>
   activeActions: Map<string, ActiveVehicleAction>
   lastActionOutcome: ActionOutcome
+  setStageMode: (mode: ExperienceState['stageMode']) => void
   requestOrbit: (preset: OrbitPreset) => void
   beginManualOrbit: () => void
   setModelStatus: (status: ExperienceState['modelStatus']) => void
@@ -43,6 +45,7 @@ const initialLightStates = () => new Map<LightPartId, boolean>([
 ])
 
 export const useExperienceStore = create<ExperienceState>((set) => ({
+  stageMode: 'studio',
   cameraControlOwner: 'orbit',
   activeOrbitPreset: 'hero_front_left',
   orbitRequestId: 0,
@@ -54,6 +57,7 @@ export const useExperienceStore = create<ExperienceState>((set) => ({
   lightStates: initialLightStates(),
   activeActions: new Map(),
   lastActionOutcome: null,
+  setStageMode: (stageMode) => set({ stageMode }),
   requestOrbit: (preset) => set((state) => ({
     cameraControlOwner: 'orbit',
     activeOrbitPreset: preset,

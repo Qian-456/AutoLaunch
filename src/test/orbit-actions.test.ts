@@ -8,6 +8,7 @@ describe('registered VehicleAction pipeline', () => {
   beforeEach(() => {
     useExperienceStore.setState({
       activeOrbitPreset: 'hero_front_left',
+      stageMode: 'studio',
       orbitRequestId: 0,
       manualOrbit: false,
       notice: null,
@@ -111,6 +112,13 @@ describe('registered VehicleAction pipeline', () => {
     useExperienceStore.getState().beginManualOrbit()
     expect(useExperienceStore.getState().manualOrbit).toBe(true)
     expect(useExperienceStore.getState().activeOrbitPreset).toBe('turntable')
+    expect(su7ConceptPack.orbitActions.turntable.autoRotateSpeed).toBe(2.25)
+  })
+
+  it('switches the presentation stage without creating another action path', () => {
+    useExperienceStore.getState().setStageMode('launch')
+    expect(useExperienceStore.getState().stageMode).toBe('launch')
+    expect(useExperienceStore.getState().activeActions.size).toBe(0)
   })
 
   it('keeps model-specific corrections and vehicle actions inside the Product Pack', () => {

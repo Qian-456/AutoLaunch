@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
+import { useProgress } from '@react-three/drei'
 import { ACESFilmicToneMapping, SRGBColorSpace } from 'three'
 import { Experience } from './components/Experience'
 import { su7ConceptPack } from './pack/su7-concept.pack'
@@ -10,22 +11,22 @@ import { useExperienceStore } from './store/experience-store'
 import type { OrbitPreset, VehicleAction } from './types'
 
 const orbitButtons: Array<{ preset: OrbitPreset; label: string }> = [
-  { preset: 'hero_front_left', label: '参考图视角' },
-  { preset: 'front', label: '正面' },
-  { preset: 'driver_side', label: '主驾侧' },
-  { preset: 'rear_three_quarter', label: '车尾 3/4' },
-  { preset: 'turntable', label: '360° 环绕' },
+  { preset: 'hero_front_left', label: '主视觉' },
+  { preset: 'front', label: '前脸' },
+  { preset: 'rear_three_quarter', label: '车尾' },
+  { preset: 'turntable', label: '360°' },
 ]
 
-const vehicleButtons: Array<{ label: string; action: Exclude<VehicleAction, { type: 'orbit' }> }> = [
-  { label: '打开车窗', action: { type: 'window', target: 'driver_front', open: true } },
-  { label: '关闭车窗', action: { type: 'window', target: 'driver_front', open: false } },
-  { label: '打开后备箱', action: { type: 'trunk', open: true } },
-  { label: '关闭后备箱', action: { type: 'trunk', open: false } },
-  { label: '开启大灯', action: { type: 'lights', target: 'headlight', on: true } },
-  { label: '关闭大灯', action: { type: 'lights', target: 'headlight', on: false } },
-  { label: '开启尾灯', action: { type: 'lights', target: 'taillight', on: true } },
-  { label: '关闭尾灯', action: { type: 'lights', target: 'taillight', on: false } },
+const vehicleControls: Array<{
+  id: 'window' | 'trunk' | 'headlight' | 'taillight'
+  label: string
+  enable: Exclude<VehicleAction, { type: 'orbit' }>
+  disable: Exclude<VehicleAction, { type: 'orbit' }>
+}> = [
+  { id: 'window', label: '主驾车窗', enable: { type: 'window', target: 'driver_front', open: true }, disable: { type: 'window', target: 'driver_front', open: false } },
+  { id: 'trunk', label: '后备箱', enable: { type: 'trunk', open: true }, disable: { type: 'trunk', open: false } },
+  { id: 'headlight', label: '大灯', enable: { type: 'lights', target: 'headlight', on: true }, disable: { type: 'lights', target: 'headlight', on: false } },
+  { id: 'taillight', label: '尾灯', enable: { type: 'lights', target: 'taillight', on: true }, disable: { type: 'lights', target: 'taillight', on: false } },
 ]
 
 class SceneErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
@@ -58,8 +59,10 @@ export function App() {
   const [command, setCommand] = useState('')
   const [isCommandDrawerOpen, setIsCommandDrawerOpen] = useState(false)
   const [feedback, setFeedback] = useState('拖动车身区域可自由旋转 · 滚轮缩放')
+  const { progress: loadingProgress } = useProgress()
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null)
   const modelStatus = useExperienceStore((state) => state.modelStatus)
+  const stageMode = useExperienceStore((state) => state.stageMode)
   const activeOrbitPreset = useExperienceStore((state) => state.activeOrbitPreset)
   const notice = useExperienceStore((state) => state.notice)
   const voiceState = useExperienceStore((state) => state.inputMode.voice)
@@ -68,6 +71,7 @@ export function App() {
   const headlightOn = useExperienceStore((state) => state.lightStates.get('headlight'))
   const taillightOn = useExperienceStore((state) => state.lightStates.get('taillight'))
   const setVoiceState = useExperienceStore((state) => state.setVoiceState)
+  const setStageMode = useExperienceStore((state) => state.setStageMode)
 
   const runOrbit = useCallback((preset: OrbitPreset) => {
     const result = dispatchVehicleAction({ type: 'orbit', preset })
@@ -164,13 +168,23 @@ export function App() {
             <h1>2025 SU7 ULTRA</h1>
           </div>
         </div>
-        <div className={`model-state model-state--${modelStatus}`}>
-          <span />
-          {modelStatus === 'ready' ? '3D MODEL ONLINE' : modelStatus === 'error' ? 'MODEL ERROR' : 'LOADING 3D MODEL'}
+        <div className="topbar-actions">
+          <button
+            className={`stage-mode-button${stageMode === 'launch' ? ' active' : ''}`}
+            type="button"
+            onClick={() => setStageMode(stageMode === 'launch' ? 'studio' : 'launch')}
+          >
+            <span aria-hidden="true" />
+            {stageMode === 'launch' ? '退出发布会展位' : '发布会模式'}
+          </button>
+          <div className={`model-state model-state--${modelStatus}`}>
+            <span />
+            {modelStatus === 'ready' ? '3D READY' : modelStatus === 'error' ? 'MODEL ERROR' : `${Math.round(loadingProgress)}% LOADING`}
+          </div>
         </div>
       </header>
 
-      <section className="stage" aria-label="SU7 Ultra 三维交互展示">
+      <section className={`stage stage--${stageMode}`} aria-label="SU7 Ultra 三维交互展示">
         <SceneErrorBoundary>
           <Canvas
             shadows
@@ -196,53 +210,57 @@ export function App() {
 
         {modelStatus === 'loading' && (
           <div className="loading-card" role="status">
-            <span className="loader" />
-            <strong>正在载入 2025 SU7 Ultra</strong>
-            <small>首次加载约 34 MB</small>
+            <div className="loading-card__value">{Math.round(loadingProgress)}<small>%</small></div>
+            <strong>正在载入数字展车</strong>
+            <div className="loading-card__track"><span style={{ width: `${Math.max(4, loadingProgress)}%` }} /></div>
+            <small>32.3 MB 模型 · 已启用预加载与缓存复用</small>
           </div>
         )}
 
         {notice && <div className="notice">{notice}</div>}
 
-        <aside className="vehicle-panel">
-          <p>VEHICLE ACTIONS</p>
-          <h2>车辆控制</h2>
-          <div className="vehicle-buttons">
-            {vehicleButtons.map(({ label, action }) => {
-              const active = action.type === 'window'
-                ? windowState === (action.open ? 'open' : 'closed')
-                : action.type === 'trunk'
-                  ? trunkState === (action.open ? 'open' : 'closed')
-                  : (action.target === 'headlight' ? headlightOn : taillightOn) === action.on
-              return (
-                <button
-                  className={active ? 'active' : ''}
-                  disabled={modelStatus !== 'ready'}
-                  key={label}
-                  onClick={() => runVehicleAction(action)}
-                >
-                  {label}
-                </button>
-              )
-            })}
-          </div>
-        </aside>
+        <div className="control-deck">
+          <section className="vehicle-quickbar" aria-label="车辆快捷控制">
+            <div className="deck-heading">
+              <span>QUICK CONTROL</span>
+              <strong>车辆控制</strong>
+            </div>
+            <div className="vehicle-buttons">
+              {vehicleControls.map(({ id, label, enable, disable }) => {
+                const active = id === 'window'
+                  ? windowState === 'open'
+                  : id === 'trunk'
+                    ? trunkState === 'open'
+                    : id === 'headlight' ? Boolean(headlightOn) : Boolean(taillightOn)
+                return (
+                  <button
+                    className={active ? 'active' : ''}
+                    disabled={modelStatus !== 'ready'}
+                    key={id}
+                    onClick={() => runVehicleAction(active ? disable : enable)}
+                    aria-pressed={active}
+                  >
+                    <span aria-hidden="true" />
+                    {label}
+                    <small>{active ? 'ON' : 'OFF'}</small>
+                  </button>
+                )
+              })}
+            </div>
+          </section>
 
-        <aside className="camera-panel">
-          <p>ORBIT ACTIONS</p>
-          <h2>镜头控制</h2>
-          <div className="camera-buttons">
-            {orbitButtons.map(({ preset, label }, index) => (
+          <nav className="camera-switcher" aria-label="镜头控制">
+            {orbitButtons.map(({ preset, label }) => (
               <button
                 className={activeOrbitPreset === preset ? 'active' : ''}
                 key={preset}
                 onClick={() => runOrbit(preset)}
               >
-                <span>0{index + 1}</span>{label}
+                {label}
               </button>
             ))}
-          </div>
-        </aside>
+          </nav>
+        </div>
 
         <div className={`interaction-drawer${isCommandDrawerOpen ? ' interaction-drawer--open' : ''}`}>
           <button
