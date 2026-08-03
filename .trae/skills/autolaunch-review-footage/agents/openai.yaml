@@ -1,0 +1,4 @@
+interface:
+  display_name: "AutoLaunch 素材验收与裁切"
+  short_description: "Review recordings and produce clean source cuts safely"
+  default_prompt: "Use $autolaunch-review-footage to inspect and prepare the latest AutoLaunch recording."

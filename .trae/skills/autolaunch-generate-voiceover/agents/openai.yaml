@@ -1,0 +1,4 @@
+interface:
+  display_name: "AutoLaunch AI 旁白生成"
+  short_description: "Generate private segmented Chinese narration with DashScope"
+  default_prompt: "Use $autolaunch-generate-voiceover to prepare the AutoLaunch narration locally."

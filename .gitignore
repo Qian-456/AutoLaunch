@@ -6,6 +6,8 @@
 # ---------- 依赖 ----------
 node_modules/
 .venv/
+__pycache__/
+*.py[cod]
 .pnp/
 .pnp.js
 .yarn/install-state.gz
@@ -42,6 +44,27 @@ lerna-debug.log*
 .env
 .env.local
 .env.*.local
+
+# Local-only voice/video production secrets, tools, and generated media
+.tts-cache/
+scripts/generate-dashscope-voiceover.py
+scripts/render-bilibili-video.ps1
+scripts/tts/
+*.wav
+*.mp3
+*.aac
+*.m4a
+*.flac
+*.ogg
+*.opus
+*.srt
+*.ass
+*.vtt
+videos/edit-work/dashscope-voice/
+videos/edit-work/voice_*.wav
+videos/edit-work/*.mp3
+videos/edit-work/*contact*.jpg
+videos/edit-work/v1-last-frame.jpg
 # .env.example 必须保留
 
 # ---------- 测试与覆盖率 ----------
@@ -87,3 +110,9 @@ $RECYCLE.BIN/
 
 # ---------- 产品 Pack 临时工作目录 ----------
 2025-xiaomi-su7-ultra/
+
+# ---------- 视频脚本与制作素材（不对外发布） ----------
+docs/bilibili-video-*
+docs/video-production/
+docs/voiceover/
+videos/
