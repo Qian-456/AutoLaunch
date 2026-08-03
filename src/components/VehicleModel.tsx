@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react'
-import { useGLTF } from '@react-three/drei'
+import { useGLTF, useTexture } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
-import { Color, type Mesh, type MeshStandardMaterial } from 'three'
+import { Color, Mesh, MeshPhysicalMaterial, type MeshStandardMaterial } from 'three'
 import { SkeletonUtils } from 'three/examples/jsm/Addons.js'
 import { su7ConceptPack } from '../pack/su7-concept.pack'
 import { useExperienceStore } from '../store/experience-store'
@@ -11,10 +11,15 @@ export function VehicleModel() {
   const gltf = useGLTF(su7ConceptPack.model.path)
   const renderer = useThree((state) => state.gl)
   const scene = useMemo(() => SkeletonUtils.clone(gltf.scene), [gltf.scene])
+  const silverStripeMask = useTexture(su7ConceptPack.appearance.decalMeshes[0].alphaMap)
   const setModelStatus = useExperienceStore((state) => state.setModelStatus)
   const setNotice = useExperienceStore((state) => state.setNotice)
 
   useEffect(() => {
+    const decalOverlays: Mesh[] = []
+    silverStripeMask.flipY = false
+    silverStripeMask.needsUpdate = true
+
     const missingNodes = Object.entries(su7ConceptPack.nodeMap)
       .filter(([, rawName]) => !scene.getObjectByName(rawName))
       .map(([semanticId]) => semanticId)
@@ -95,8 +100,53 @@ export function VehicleModel() {
       })
       mesh.material = Array.isArray(mesh.material) ? clonedMaterials : clonedMaterials[0]
     })
+
+    for (const decal of su7ConceptPack.appearance.decalMeshes) {
+      const sourceMeshes: Mesh[] = []
+      scene.traverse((object) => {
+        const mesh = object as Mesh
+        if (!mesh.isMesh || decal.excludeNodes.includes(mesh.name as never)) return
+        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+        if (materials.some((material) => material.name === decal.sourceMaterial)) {
+          sourceMeshes.push(mesh)
+        }
+      })
+
+      for (const sourceMesh of sourceMeshes) {
+        const material = new MeshPhysicalMaterial({
+          name: `${decal.name}_Material`,
+          color: decal.color,
+          metalness: decal.metalness,
+          roughness: decal.roughness,
+          alphaMap: silverStripeMask,
+          alphaTest: decal.alphaTest,
+          transparent: true,
+          depthWrite: false,
+          polygonOffset: true,
+          polygonOffsetFactor: decal.polygonOffsetFactor,
+          polygonOffsetUnits: decal.polygonOffsetFactor,
+        })
+        const overlay = new Mesh(sourceMesh.geometry, material)
+        overlay.name = `${decal.name}__${sourceMesh.name}`
+        overlay.position.copy(sourceMesh.position)
+        overlay.quaternion.copy(sourceMesh.quaternion)
+        overlay.scale.copy(sourceMesh.scale)
+        overlay.renderOrder = 2
+        overlay.castShadow = false
+        overlay.receiveShadow = false
+        sourceMesh.parent?.add(overlay)
+        decalOverlays.push(overlay)
+      }
+    }
     setModelStatus('ready')
-  }, [renderer, scene, setModelStatus, setNotice])
+    return () => {
+      for (const overlay of decalOverlays) {
+        overlay.removeFromParent()
+        const materials = Array.isArray(overlay.material) ? overlay.material : [overlay.material]
+        materials.forEach((material) => material.dispose())
+      }
+    }
+  }, [renderer, scene, setModelStatus, setNotice, silverStripeMask])
 
   return (
     <group>

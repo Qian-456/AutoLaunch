@@ -221,6 +221,23 @@ export const su7ConceptPack = {
         note: 'Only the dedicated flank-logo overlay retains CarPaint_Decal, producing the long silver stripe and Ultra wordmark without leaking gray UV areas onto the door handles.',
       },
     ],
+    decalMeshes: [
+      {
+        semanticId: 'trim_front_rear_silver',
+        name: 'SU7_Silver_Center_Stripes',
+        sourceMaterial: 'CarPaint',
+        alphaMap: '/assets/CarDecal_alpha_B.png',
+        color: '#aeb2b5',
+        metalness: 0.72,
+        roughness: 0.3,
+        alphaTest: 0.5,
+        polygonOffsetFactor: -2,
+        excludeNodes: [
+          'XiaomicarFlankLogo_carFlankLogo_blinn11_CarPaint_0',
+        ],
+        note: 'The FBX decal mask is projected onto cloned CarPaint geometry so the hood and rear silver center stripes remain independent from the yellow body material.',
+      },
+    ],
     lightingExperiments: [
       {
         id: 'taillight-red-preview',
