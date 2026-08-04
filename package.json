@@ -6,10 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "deploy": "powershell -ExecutionPolicy Bypass -File scripts/deploy.ps1",
-    "test": "vitest run",
-    "inspect:glb": "node scripts/inspect-glb.mjs public/assets/su7_ultra.glb",
-    "measure:glb": "node scripts/measure-glb-assets.mjs public/assets/su7_ultra.glb"
+    "test": "vitest run"
   },
   "dependencies": {
     "@react-three/drei": "^9.122.0",

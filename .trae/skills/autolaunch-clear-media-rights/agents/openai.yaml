@@ -1,4 +1,0 @@
-interface:
-  display_name: "AutoLaunch 媒体合规留证"
-  short_description: "Audit media licenses, attribution and Git privacy before release"
-  default_prompt: "Use $autolaunch-clear-media-rights to audit media licensing and Git privacy before release."

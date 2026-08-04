@@ -68,9 +68,11 @@ AutoLaunch 要验证的核心观点是：用户不必观看完全相同的产品
 6. AI、语音或网络不可用时，文字和手动操作仍可完成演示。
 7. 每个功能都要有自动化测试、手动视觉验收和清晰的失败反馈。
 
-### 3 小时 MVP（2026-08-02 当日交付）
+### v0.1.0 已完成基线（2026-08-04 当前状态）
 
-**只做一条完整闭环，90 秒 × 4 章节：**
+> 以下内容均已在当前代码库中可运行，视为黑客松现场「不用再搭」的基础层。
+
+**已交付完整闭环 90 秒 × 4 章节发布会：**
 
 ```
 按钮 / 点击车模 / 文字输入 / 语音转写 / 发布会脚本
@@ -84,45 +86,73 @@ AutoLaunch 要验证的核心观点是：用户不必观看完全相同的产品
         3D 动画 + 已注册镜头 + UI 反馈
 ```
 
-**章节固定顺序（总时长 90 ± 10 秒）：**
+**v0.1 已注册镜头池（AI 只能从这里选）：**
+| 镜头 ID | 说明 |
+|---|---|
+| `hero_front_left` | 前左 45° 英雄视角 |
+| `front` | 前脸正视角 |
+| `driver_side` | 主驾侧视角 |
+| `rear_three_quarter` | 后右 45° 三视图 |
+| `turntable` | 360° 自动旋转展台 |
 
-| 章节 | 时间 | 镜头 ID | 动作 | 字幕 |
-| --- | ---: | --- | --- | --- |
-| Ch1 前脸 | 0–15s | `front_face` | `lights:headlight:on` | 展示前脸设计与大灯点亮 |
-| Ch2 侧视 | 15–35s | `side_driver`（配合 360° 环绕） | `window:driver_front:open→close` | 主驾车窗升降展示 |
-| Ch3 车尾 | 35–60s | `rear_3q` | `trunk:open→close` + `lights:taillight:on` | 后备箱开合与尾灯展示 |
-| Ch4 内饰组合 | 60–90s | `interior_overview` | `window+lights` 组合动作 | 综合交互能力演示 |
+**v0.1 已注册动作池（AI 只能从这里选，按 VehicleAction 格式调用）：**
+| 动作类别 | 已注册可用 ID 与参数组合 |
+|---|---|
+| 灯光 | `lights:headlight:on/off`、`lights:taillight:on/off` |
+| 车窗 | `window:driver_front:open/close(:progress)`、`window:passenger_front:open/close`、`window:driver_rear:open/close`、`window:passenger_rear:open/close`、`window:all:open/close`（四车窗同步） |
+| 尾门 | `trunk:open/close`（真实铰链动画，含 body/liner/spoiler/taillight 协同） |
+| 镜头 | `orbit:preset`（5 个 preset，同镜头池） |
 
-**MVP 四入口必须覆盖：**
+**v0.1 已完成四入口：**
 - 按钮：8 个（开窗/关窗/开后备箱/关后备箱/开灯/关灯/播放/暂停）
 - 文字输入：回车提交，确定性关键字/正则匹配
 - 语音：Web Speech API `zh-CN`，走文字同一解析通道
 - OrbitControls：左键拖动立即打断脚本镜头
 
-除非用户明确改变范围，不要主动加入账号、支付、大型后台、真实车辆 API、任意动画生成、复杂多 Agent 对话或通用低代码平台。
+**v0.1 已完成架构基础设施：**
+- Vite + React + TS + R3F（@react-three/fiber + drei OrbitControls）脚手架
+- `su7_ultra.glb` 放置于 `public/assets/`，启动时存在性检查
+- 完整 Product Pack：node-map（37 个语义节点已映射）+ 动作声明 + 镜头声明 + 90 秒脚本 + 录制脚本
+- ActionDispatcher：幂等 / 冲突组取消（每车窗独立冲突组 + 前后灯组 + rear 组）/ 超时 > 5s / 失败回滚
+- 自动发布会打断状态机：takeover → 首次弹窗 [恢复/保持手动] → 会话内二次接管不重复弹
+- 左下角永久可见非官方声明条 + 顶部错误通知条（模型加载失败 / 节点缺失 / 麦克风拒绝 / 动作超时）
+- 8 条 vitest 用例（≥ 要求 5 条）
+- FastAPI 后端骨架：`/api/health` + 前端静态文件服务（dist/）+ Dockerfile + compose.yaml + vercel.json
+- knowledge/ 目录 4 个人工精选 md：核心参数、空间实测、竞品对比、车主实测（黑客松 RAG 直接复用）
+
+**黑客松现场不重复做（除非用户明确改变范围）：**
+- 账号、支付、大型后台、真实车辆 API、任意动画生成、复杂多 Agent 对话或通用低代码平台
+- GLB 材质精修 / PBR 调优 / 模型切分重拓扑（v0.1 已有尾门真实铰链 + 四车窗真实 Mesh 升降 + 环境光投影）
 
 ### 8 月 v0.1 范围边界
 
-**✅ 本次必须（3 小时 MVP + 8 月内）：**
+**✅ 已完成（2026-08-04 状态）：**
 
-1. Vite + React + TS + R3F（@react-three/fiber + drei OrbitControls）脚手架
-2. `su7_ultra.glb` 放置于 `public/assets/`，启动时存在性检查
-3. 最小 Product Pack：node-map + 动作声明 + 镜头声明 + 90 秒脚本
-4. ActionDispatcher：幂等 / 冲突组取消 / 超时 > 5s / 失败回滚
-5. 自动发布会打断状态机：takeover → 3 秒倒计时 → 恢复 / 保持接管
-6. 左下角永久可见非官方声明条："非官方概念演示 \| 模型：Ddiaz Design（Sketchfab CC BY-NC-SA）\| 不代表小米官方"
-7. 顶部错误通知条：模型加载失败 / 节点缺失 / 麦克风拒绝 / 动作超时
-8. 至少 5 条 vitest 用例（幂等、冲突组、已知解析、未知解析、node-map 缺失降级）
-9. `.env.example` + `.env` 同步更新：`VITE_APP_UNOFFICIAL_DISCLAIMER`、`VITE_VOICE_LANG=zh-CN`
-10. README 更新：启动命令 + 3 条手动验收步骤 + 模型授权说明
+1. ✅ Vite + React + TS + R3F（@react-three/fiber + drei OrbitControls）脚手架
+2. ✅ `su7_ultra.glb` 放置于 `public/assets/`，启动时存在性检查
+3. ✅ 完整 Product Pack：node-map（37 语义节点）+ 动作声明 + 镜头声明 + 90 秒脚本 + 录制脚本
+4. ✅ ActionDispatcher：幂等 / 冲突组取消 / 超时 > 5s / 失败回滚
+5. ✅ 自动发布会打断状态机：takeover → 首次弹窗 [恢复/保持手动] → 会话内二次接管不重复弹
+6. ✅ 左下角永久可见非官方声明条 + 顶部错误通知条（模型加载失败 / 节点缺失 / 麦克风拒绝 / 动作超时）
+7. ✅ 8 条 vitest 用例（≥ 要求 5 条）
+8. ✅ `.env.example` + `.env` 同步更新（VITE_* 配置）
+9. ✅ README 更新（启动命令 + 手动验收 + 授权说明）
+10. ✅ FastAPI 后端骨架（/api/health + 静态文件服务 + Dockerfile + compose.yaml + vercel.json）
+11. ✅ knowledge/ 4 个 md 知识库（核心参数 / 空间实测 / 竞品对比 / 车主实测）
 
-**⏳ 延后（8 月不做）：**
+**🔥 黑客松现场本次必须（基于 v0.1 基线）：**
 
-- FastAPI 后端 / LLM / RAG / AI Director（9 月 v0.2）
+12. AI Director 路由（FastAPI）：选 2 人设之一 → 返回章节-镜头-动作 JSON + schema 校验 + fallback
+13. RAG 路由（FastAPI）：人工精选 Markdown + 关键词 fallback + 联动镜头/动作
+14. 前端 UI：左侧人设标签区 + 右侧问答对话区 + 镜头动作联动
+15. 合规定位条：全程显示「非官方概念演示 · Ddiaz Design Sketchfab CC BY-NC-SA 4.0」
+16. 4 个实体注册表 JSON（persona-chapters / chapter-pool / rag-intent-actions / registry-whitelist）预置到 public/fallbacks/
+
+**⏳ 延后（黑客松不做，回到主版本继续推进）：**
+
 - Product Pack 多文件拆分、Zod schema 版本校验器（8 月下旬视情况）
 - 复杂章节跳转 / 点击进度条跳转（首版只顺序播放）
 - TTS 语音合成旁白（只用字幕）
-- GLB 材质精修 / PBR 调优 / 模型切分重拓扑（8 月中下旬单独迭代）
 - 移动端触控精修、响应式断点（仅保证 ≥1280px 桌面端）
 - Playwright / Cypress E2E（首版仅 vitest + 手动视觉验收）
 
@@ -318,43 +348,134 @@ loading → autoplay（自动开始）
 - 语音按钮置灰，tooltip 显示"麦克风不可用，请使用文字或按钮"
 - 页面不报错、不崩溃
 
-### 3 小时 MVP 开发顺序（严格步骤，禁止跳步）
+### 黑客松合规边界（赛前允许做 vs 严格现场 4 小时做）
+
+> ⚠️ **书面合规依据**：本节内容严格对应赛事「赛前允许准备静态资产，不允许提前编写业务代码/接入 LLM」的常规规则。任何赛前开发行为不得越界。
+
+**✅ 赛前允许做（2026-08-04 至 2026-08-16 开赛之前）：**
+
+| 类别 | 允许的具体内容 | 相关目录 |
+|---|---|---|
+| 3D 模型资产 | 新增 GLB 模型：儿童推车.glb / 24 寸行李箱.glb / 儿童座椅.glb 等后备箱可视化道具；前备箱内部件；轮毂/刹车卡钳变体；车身拉花/涂装变体；任意额外 3D 素材 | `public/assets/` |
+| 知识库文档 | knowledge/ 目录下 01–04.md 继续补充数据、补更多对比项、补权威媒体来源；新增额外 md 文档；排版与内容增强 | `knowledge/` |
+| Product Pack 扩展 | su7-concept.pack.ts 的 nodeMap 新增更多语义节点映射；新增 appearance 材质覆盖；新增 orbitActions 镜头位姿；新增已注册动作的参数调优（如 durationMs、虚拟窗尺寸）；**不得新增未在 v0.1 注册过的动作类型** | `src/pack/su7-concept.pack.ts`、`glb-nodes.json` |
+
+**❌ 严格禁止赛前做（必须留在黑客松现场 4 小时内开发）：**
+
+- 实体注册表 JSON 实际写入 `public/fallbacks/` 目录（可保留设计文档，但不落地成代码文件）
+- FastAPI 任何新增路由骨架（`/api/ai-director`、`/api/rag` 等）
+- `expandChapterIdsToLaunchScript` 展开函数、fallback 读取逻辑、关键词匹配逻辑
+- 前端任何新增 UI（人设标签区、问答对话区、气泡、追问按钮）
+- 任何 TDD 测试、业务代码测试、E2E 测试用例
+- 任何 LLM API Key 配置、Prompt 编写、few-shot 示例注入、网络请求代码
+- 任何与 AI Director / RAG 相关的 `.env` 新增变量写入
+- 设计文档以外的实际代码（AGENTS.md、docs/ 文档允许更新）
+
+---
+
+### 黑客松实体注册表设计规范（一鱼三吃）
+
+**详细设计文档（纯 Schema 稿，赛前允许写）**：见 [2026-08-04-hackathon-entity-registry-design.md](file:///C:/Users/11873/Desktop/AutoLaunch/docs/superpowers/specs/2026-08-04-hackathon-entity-registry-design.md)
+
+**⚠️ 合规提醒：以下 4 个 JSON 的实际内容，赛前只允许以 Schema 形式存在于设计文档，禁止提前写入 `public/fallbacks/` 目录，写入操作必须发生在现场 4 小时内。**
+
+**现场写入位置**：`public/fallbacks/`（Vite 构建后 dist/fallbacks/ 同步，FastAPI 也能读）
 
 ```
-Step 1（15 min）：GLB 节点探测脚手架
-  → Vite + React + TS + R3F 最小工程
-  → 复制 su7_ultra.glb → public/assets/su7_ultra.glb
-  → useGLTF 加载后 console.log(Object.keys(scene.children)) 打印所有节点名
-  → 验证 OrbitControls 可拖动、模型可见
-  → 输出：节点名清单 → 填入 nodeMap
+public/fallbacks/         ← 赛前留空，现场 Step0 填入
+├── persona-chapters.json          ← ① 人设层（AI 决策用）：性能党/家庭用户 → 章节权重与推荐顺序
+├── chapter-pool.json              ← ② 执行层（前端执行用）：6 个可复用 chapter 模板
+├── rag-intent-actions.json        ← ③ RAG 回填层：15 个高频问题意图 → 联动动作映射
+└── registry-whitelist.json        ← ④ 白名单校验层：镜头/动作/人设 ID 枚举（三者共享）
+```
 
-Step 2（30 min）：Product Pack + 前置测试
-  → 根据 Step1 节点名建立 nodeMap（能填几项填几项，其余走降级）
-  → 完整 actions/cameras/launchScript 对象
-  → demo-qa-engineer 同步写 5 条 vitest 用例：
-      1. ActionDispatcher 幂等（同一状态重复命令）
-      2. ActionDispatcher 冲突组取消（同组新动作取消旧动作）
-      3. 解析器 "打开主驾车窗" → 正确 VehicleAction
-      4. 解析器 "起飞" → 返回 suggestion fallback
-      5. Product Pack 缺失 window_driver_front 节点 → 点击开窗返回降级提示且不抛异常
+**「一鱼三吃」设计原则**：每个 JSON 同时承担三重身份
 
-Step 3（60 min）：核心运行时
-  → ActionDispatcher（纯逻辑，读写 Zustand）
-  → 镜头系统（cameras 注册、LERP 切换、cameraControlOwner 互斥）
-  → LaunchPlayer（按 launchScript 章节推进、触发动作 + 字幕）
-  → UI：8 按钮控制栏 + 文字输入框 + 章节进度条 + 错误通知条 + 左下角声明条
-  → R3F 层：动作 → Mesh transform / 材质 emissive 应用
+| 身份 | 消费方 | 用法 |
+|---|---|---|
+| ① AI Prompt 注入的「白名单注册表」 | LLM（AI Director / RAG） | 整个 JSON 作为 system prompt 一部分喂入，LLM 只能从白名单选 |
+| ② 后端路由的「fallback 数据源」 | FastAPI | LLM 超时 / 挂了 / schema 不对时，后端直接读 JSON 返回正确格式 |
+| ③ 前端的「运行时配置 + 校验器」 | React 前端 | 收到 Agent 返回结果后，用 registry 校验字段合法；失败则切 fallback |
 
-Step 4（30 min）：语音 + 收尾
-  → Web Speech API zh-CN 接入 + 降级提示
-  → 接管状态机（首次弹窗提示 [恢复/保持手动] / 会话内拒绝后不重复弹 / 退出接管按钮）
-  → .env + .env.example 配置项
-  → README 启动步骤 + 授权说明 + 3 条手动验收
+**两层编排架构（核心约束）**：
 
-Step 5（15 min + buffer 30 min）：独立验收
-  → demo-qa-engineer 跑 7 条 v0.1 验收标准
-  → 录制/截图手动验收结果
-  → 输出 PASS / PASS WITH RISKS / FAIL 报告
+```
+用户选人设
+    ↓
+① persona-chapters.json（AI 决策层：选哪些 chapter + 排顺序）
+    ↓ LLM 仅输出：{ persona, chapterIds: ["ch1", "ch2", "ch3"] } ← 极简，出错概率低
+    ↓ 后端/前端「展开函数」根据 chapterIds 查询
+② chapter-pool.json（执行层：每个 chapter 的具体镜头、动作、字幕）
+    ↓ 拼成符合 Schema 的完整 chapters 数组
+前端 LaunchPlayer 执行
+    ↓ 用 ④ registry-whitelist.json 校验每个镜头/动作 ID
+3D 场景动起来
+```
+
+**硬性规则**：
+- AI Director 输出 **只能是 chapterIds 数组**，严禁输出完整 chapters（容易瞎写 narration、atMs）
+- 展开函数在前端/后端完成，从 chapter-pool.json 里取预存的 narration + defaultActions
+- 前端校验失败率 > 30% 直接切 persona fallback，不尝试局部修复
+
+---
+
+### 黑客松 4 小时现场落地步骤（基于 v0.1 已完成基线 + 合规边界）
+
+> 旧版「3 小时 MVP 开发顺序」已作废，v0.1 基线全部完成。本节所有步骤**严格要求在黑客松现场 4 小时计时窗口内完成**，赛前不得提前编写。
+
+```
+Step 0（45 min）：实体 JSON 落地 + 环境校验  ← 新增：填入 public/fallbacks/
+  → 按照 docs/superpowers/specs/2026-08-04-hackathon-entity-registry-design.md 的 Schema
+  → 手动创建 4 个 JSON 文件写入 public/fallbacks/：
+      1. persona-chapters.json（2 人设 + fallbackChapterIdsByPersona）
+      2. chapter-pool.json（6 chapter 模板，每套 2 份 narration 文案）
+      3. rag-intent-actions.json（15 intent，keywords + linkedVehicleActions）
+      4. registry-whitelist.json（5 镜头 + 10 动作 + 2 人设白名单）
+  → npm i && npm run build 验证 dist/fallbacks/ 4 个 JSON 可通过浏览器访问
+  → FastAPI /api/health 返回 status=ok，模型字节数正常
+  → Chrome 打开页面，确认左下角合规条 + v0.1 90 秒发布会无报错
+  → 输出：4 JSON 就位，跳过任何脚手架重搭工作
+
+Step 1（45 min）：RAG 路由（FastAPI）+ 知识库接入
+  → 新增 POST /api/rag (question: string) 路由骨架
+  → 读取 rag-intent-actions.json 做关键词匹配 → 回填 linkedVehicleActions + suggestedFollowUps
+  → 读取 knowledge/ 4 个 md → 简单关键词搜索 + 拼接 answer + citations（不用向量库）
+  → comparison 字段：命中 defaultComparisonTopic 时从 03_竞品对比.md 取对应段落
+  → demo-qa-engineer 同步写 3 条测试：
+      1. 问"后备箱多大"→ 返回含 rear_three_quarter + trunk open 联动
+      2. 问"零百加速几秒"→ 返回含 front + 大灯联动
+      3. 问"今天天气"→ 返回空 linkedActions 但 answer 不报错
+
+Step 2（75 min）：AI Director 路由（FastAPI）+ 两层编排
+  → 新增 POST /api/ai-director (persona: "performance" | "family") 路由骨架
+  → 后端实现 expandChapterIdsToLaunchScript(chapterIds, persona) 展开函数
+    → 去 chapter-pool.json 取对应 chapter 模板
+    → 填 narrationTemplates[persona] + defaultActions + recommendedDurationMs
+  → Schema 校验失败或 LLM 超时 → 直接读 persona-chapters.json.fallbackChapterIdsByPersona 展开
+  → Prompt 注入：registry-whitelist.json（白名单）+ persona-chapters.json（权重）
+  → 要求 LLM 仅输出 { persona, chapterIds: string[] }（3 个字符串）+ 接 LLM API
+  → demo-qa-engineer 同步写 3 条测试：
+      4. persona=performance → 返回 chapters[0].camera == "front"
+      5. persona=family → 返回 chapters[0].camera == "rear_three_quarter"
+      6. 临时 mock LLM 抛异常 → 自动切 fallback，返回格式依然合法
+
+Step 3（55 min）：前端 UI 与联动
+  → 左侧新增 2 个「人设标签」：性能党 🏎️ / 家庭用户 👨‍👩‍👧
+  → 点击人设 → POST /api/ai-director → 取回 chapters → 调用 LaunchPlayer 替换脚本并播放
+  → 右下角新增问答对话区：输入框 + 历史气泡 + 发送按钮
+  → 发送问题 → POST /api/rag → 收到 answer 气泡 + 自动 dispatch linkedVehicleActions
+  → suggestedFollowUps 以蓝色小按钮形式展示在气泡下方，点击自动发相同问题
+  → 顶部合规定位条保持可见，不被新 UI 遮挡
+  → .env.example + .env 同步新增：AI_API_KEY / AI_API_BASE_URL / VITE_ENABLE_HACKATHON_PANELS 等
+
+Step 4（20 min + buffer 40 min）：独立验收 + 讲稿演练
+  → demo-qa-engineer 跑 hackathon-spec 4 条验收：
+      1. 切「性能党」→ 章节顺序：前脸大灯 → 车窗 → 360° 展台
+      2. 切「家庭用户」→ 章节顺序：后视角 → 后备厢打开停留 → 四车窗下降
+      3. 问「后备箱多大？」→ RAG 返回带引用答案 + 自动切后视角 + 开后备厢
+      4. 全程合规声明不消失
+  → 断网模拟：切断 LLM API → AI Director 切 fallback，RAG 走关键词匹配
+  → 自己计时 2 分钟路演一遍，确保 3 个核心演示动作（切人设 A / 切人设 B / 问一个 RAG 问题）2 分钟内能完整做完
 ```
 
 ## Product Pack 契约（v0.1 最简版）

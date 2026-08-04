@@ -1,4 +1,0 @@
-interface:
-  display_name: "AutoLaunch 成片剪辑与质检"
-  short_description: "Assemble subtitles, voice and BGM into a verified release"
-  default_prompt: "Use $autolaunch-edit-release-video to render and validate an AutoLaunch release video."
