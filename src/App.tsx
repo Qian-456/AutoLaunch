@@ -9,6 +9,7 @@ import { parseCommand } from './runtime/command-parser'
 import { dispatchVehicleAction } from './runtime/action-dispatcher'
 import { createBrowserSpeechRecognition, type BrowserSpeechRecognition } from './runtime/browser-speech'
 import { useExperienceStore } from './store/experience-store'
+import { buildSiteTitle } from './runtime/site-title'
 import type { OrbitPreset, VehicleAction, WindowTarget } from './types'
 
 const orbitButtons: Array<{ preset: OrbitPreset; label: string }> = [
@@ -69,6 +70,13 @@ export function App() {
   const [feedback, setFeedback] = useState('拖动车身区域可自由旋转 · 滚轮缩放 · 文字可输入：主驾车窗50%')
   const { progress: loadingProgress } = useProgress()
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null)
+
+  useEffect(() => {
+    // Dual guard: Vite replaces %VITE_APP_SITE_TITLE% in index.html at build time,
+    // but this runtime assignment guarantees a Chinese-bearing title even if the
+    // static replacement is skipped (e.g. raw-static hosting, non-Vite proxy).
+    document.title = buildSiteTitle()
+  }, [])
   const modelStatus = useExperienceStore((state) => state.modelStatus)
   const stageMode = useExperienceStore((state) => state.stageMode)
   const activeOrbitPreset = useExperienceStore((state) => state.activeOrbitPreset)
