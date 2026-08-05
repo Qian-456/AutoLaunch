@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react'
-import { useGLTF } from '@react-three/drei'
-import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Html, Outlines, useGLTF } from '@react-three/drei'
+import { createPortal, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { Box3, BoxGeometry, Color, Group, MathUtils, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, Vector3 } from 'three'
 import { SkeletonUtils } from 'three/examples/jsm/Addons.js'
 import { KTX2Loader, type GLTFLoader } from 'three-stdlib'
@@ -18,7 +18,10 @@ import {
 import { useExperienceStore } from '../store/experience-store'
 import type { ActiveVehicleAction, DoorTarget, WindowTarget } from '../types'
 import { dispatchVehicleAction } from '../runtime/action-dispatcher'
-import { resolveVehicleTargetFromHit } from '../runtime/window-hit-target'
+import {
+  resolveVehicleTargetFromIntersections,
+  type VehicleHitTarget,
+} from '../runtime/window-hit-target'
 import { VehicleLightEffects } from './VehicleLightEffects'
 import { VehiclePlate } from './VehiclePlate'
 
@@ -123,6 +126,83 @@ type HatchNodeRefs = {
 }
 
 type DoorNodeRefs = { pivot: Group; definition: DoorActionDefinition; movingNodes: Object3D[] }
+
+type HoverVisual = {
+  key: string
+  target: VehicleHitTarget
+  meshes: Mesh[]
+  point: Vector3
+  label: string
+}
+
+function collectMeshes(nodes: readonly (Object3D | null | undefined)[]): Mesh[] {
+  const meshes = new Map<string, Mesh>()
+  nodes.forEach((node) => node?.traverse((object) => {
+    const mesh = object as Mesh
+    if (mesh.isMesh) meshes.set(mesh.uuid, mesh)
+  }))
+  return [...meshes.values()]
+}
+
+function vehicleHitKey(target: VehicleHitTarget): string {
+  if (target.type === 'window' || target.type === 'door' || target.type === 'lights') {
+    return `${target.type}:${target.target}`
+  }
+  return target.type
+}
+
+function vehicleHitLabel(target: VehicleHitTarget): string {
+  const state = useExperienceStore.getState()
+  if (target.type === 'window') {
+    const progress = Math.round(state.windowProgress.get(target.target) ?? 0)
+    const status = progress <= 0 ? '当前关闭' : progress >= 100 ? '当前打开' : `当前开启 ${progress}%`
+    return `${WINDOW_LABELS[target.target]} · ${status}`
+  }
+  if (target.type === 'door') {
+    const partState = state.vehiclePartStates.get(`door_${target.target}`)
+    const status = partState === 'moving' ? '动作中' : partState === 'open' ? '当前打开' : '当前关闭'
+    return `${DOOR_LABELS[target.target]} · ${status}`
+  }
+  if (target.type === 'lights') {
+    const isOn = state.lightStates.get(target.target) ?? false
+    const name = target.target === 'headlight' ? '大灯' : '贯穿尾灯'
+    return `${name} · ${isOn ? '当前点亮' : '当前熄灭'}`
+  }
+  if (target.type === 'frunk') {
+    const partState = state.vehiclePartStates.get('hatch_front')
+    const status = partState === 'moving' ? '动作中' : partState === 'open' ? '当前打开' : '当前关闭'
+    return `前备箱 · ${status}`
+  }
+  const partState = state.vehiclePartStates.get('trunk')
+  const status = partState === 'moving' ? '动作中' : partState === 'open' ? '当前打开' : '当前关闭'
+  return `后备箱 · ${status}`
+}
+
+function VehicleMeshOutline({ mesh, pulse = false }: { mesh: Mesh; pulse?: boolean }) {
+  const outlineRef = useRef<Group>(null)
+  useFrame((_, delta) => {
+    const outlineMesh = outlineRef.current?.children[0] as Mesh | undefined
+    if (!outlineMesh) return
+    const materials = Array.isArray(outlineMesh.material) ? outlineMesh.material : [outlineMesh.material]
+    materials.forEach((material) => {
+      material.transparent = true
+      material.opacity = MathUtils.damp(material.opacity, pulse ? 0.68 : 0.35, 12, delta)
+    })
+  })
+  return createPortal(
+    <Outlines
+      ref={outlineRef}
+      color="#25e6c2"
+      opacity={0}
+      transparent
+      thickness={pulse ? 2.4 : 1.6}
+      toneMapped={false}
+      renderOrder={12}
+    />,
+    mesh,
+  )
+}
+
 function collectStandardMaterials(root: Object3D | null | undefined) {
   const materials: MeshStandardMaterial[] = []
   root?.traverse((object) => {
@@ -258,42 +338,6 @@ function buildWindowHitTargets(scene: Object3D, vehicleRoot: Group): Mesh[] {
   return targets
 }
 
-/** Transparent, slightly outward-offset lamp lenses win raycasts over bodywork. */
-function buildLightHitTargets(scene: Object3D, vehicleRoot: Group): Mesh[] {
-  scene.updateWorldMatrix(true, true)
-  vehicleRoot.updateWorldMatrix(true, true)
-  const specs = [
-    { semanticId: 'headlight_left', target: 'headlight', outwardX: -0.05 },
-    { semanticId: 'headlight_right', target: 'headlight', outwardX: -0.05 },
-    { semanticId: 'taillight_left', target: 'taillight', outwardX: 0.05 },
-    { semanticId: 'taillight_right', target: 'taillight', outwardX: 0.05 },
-  ] as const
-  const targets: Mesh[] = []
-  for (const spec of specs) {
-    const node = scene.getObjectByName(su7ConceptPack.nodeMap[spec.semanticId])
-    if (!node) continue
-    const bounds = new Box3().setFromObject(node)
-    if (bounds.isEmpty()) continue
-    const size = bounds.getSize(new Vector3())
-    const worldCenter = bounds.getCenter(new Vector3())
-    worldCenter.x += spec.outwardX
-    const center = vehicleRoot.worldToLocal(worldCenter)
-    const geometry = new BoxGeometry(size.x + 0.08, size.y + 0.06, size.z + 0.06)
-    const material = new MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })
-    material.colorWrite = false
-    const proxy = new Mesh(geometry, material)
-    proxy.name = `LightHitTarget_${spec.semanticId}`
-    proxy.position.copy(center)
-    proxy.userData.vehicleHitTarget = spec.target
-    proxy.castShadow = false
-    proxy.receiveShadow = false
-    proxy.frustumCulled = false
-    vehicleRoot.add(proxy)
-    targets.push(proxy)
-  }
-  return targets
-}
-
 /**
  * Convert a normalized progress (0..100) into the absolute world-space position
  * for the declared axis by interpolating the pack's closedOffset / openOffset.
@@ -369,6 +413,7 @@ export function buildHatchFrontRefs(scene: Object3D, vehicleRoot: Group): HatchN
     scene.add(pivot)
     scene.updateMatrixWorld(true)
     movingNodes.forEach((node) => pivot.attach(node))
+    movingNodes.forEach((node) => { node.userData.vehicleHitTarget = 'frunk' })
     return { pivot, movingNodes, definition, closedRotation: definition.closedRotation, rotationAxis: 'x', isVirtual: false }
   }
   const virtual = definition.virtualHatch!
@@ -412,37 +457,6 @@ export function buildDoorRefs(scene: Object3D, vehicleRoot: Group): Record<Exclu
   return refs
 }
 
-/** Create fixed click proxies from the closed-pose bounds of real door skins and hood. */
-function buildPartsHitTargets(scene: Object3D, vehicleRoot: Group): Mesh[] {
-  scene.updateWorldMatrix(true, true)
-  vehicleRoot.updateWorldMatrix(true, true)
-  const specs = [
-    ...DOOR_TARGETS.map((target) => ({
-      name: `DoorHitTarget_${target}`,
-      node: scene.getObjectByName(su7ConceptPack.nodeMap[`door_${target}_outer`]),
-      doorTarget: target,
-    })),
-    { name: 'FrunkHitTarget', node: scene.getObjectByName(su7ConceptPack.nodeMap.hatch_front_outer), vehicleHitTarget: 'frunk' },
-  ]
-  return specs.flatMap((spec) => {
-    if (!spec.node) return []
-    const bounds = new Box3().setFromObject(spec.node)
-    if (bounds.isEmpty()) return []
-    const size = bounds.getSize(new Vector3())
-    const center = vehicleRoot.worldToLocal(bounds.getCenter(new Vector3()))
-    const material = new MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })
-    material.colorWrite = false
-    const proxy = new Mesh(new BoxGeometry(Math.max(size.x, 0.08), Math.max(size.y, 0.08), Math.max(size.z, 0.08)), material)
-    proxy.name = spec.name
-    proxy.position.copy(center)
-    if ('doorTarget' in spec) proxy.userData.doorTarget = spec.doorTarget
-    if ('vehicleHitTarget' in spec) proxy.userData.vehicleHitTarget = spec.vehicleHitTarget
-    proxy.frustumCulled = false
-    vehicleRoot.add(proxy)
-    return [proxy]
-  })
-}
-
 export function VehicleModel() {
   const renderer = useThree((state) => state.gl)
   const configureLoader = useCallback((loader: GLTFLoader) => {
@@ -456,14 +470,15 @@ export function VehicleModel() {
   const vehicleRoot = useRef<Group>(null)
   const windowRefs = useRef<Record<Exclude<WindowTarget, 'all'>, WindowNodeRefs> | null>(null)
   const windowHitTargets = useRef<Mesh[]>([])
-  const lightHitTargets = useRef<Mesh[]>([])
   const hatchRefs = useRef<HatchNodeRefs | null>(null)
   const hatchFrontRefs = useRef<HatchNodeRefs | null>(null)
   const doorRefs = useRef<Record<Exclude<DoorTarget, 'all'>, DoorNodeRefs> | null>(null)
-  const partsHitTargets = useRef<Mesh[]>([])
   const handledClickEvent = useRef<Event | null>(null)
+  const pulseTimer = useRef<number | null>(null)
   const vehicleClosedY = useRef(0)
   const runtimeAnimations = useRef(new Map<string, RuntimeAnimation>())
+  const [hoverVisual, setHoverVisual] = useState<HoverVisual | null>(null)
+  const [pulseVisual, setPulseVisual] = useState<HoverVisual | null>(null)
   const activeActions = useExperienceStore((state) => state.activeActions)
   const setModelStatus = useExperienceStore((state) => state.setModelStatus)
   const setNotice = useExperienceStore((state) => state.setNotice)
@@ -471,25 +486,76 @@ export function VehicleModel() {
   const finishAction = useExperienceStore((state) => state.finishAction)
 
   const resolveClickedPart = useCallback(
-    (object: Object3D) => resolveVehicleTargetFromHit(
-      object,
+    (intersections: ThreeEvent<PointerEvent>['intersections']) => resolveVehicleTargetFromIntersections(
+      intersections,
       su7ConceptPack.nodeMap,
       su7ConceptPack.actions.hatch_rear.movingNodeIds,
     ),
     [],
   )
 
+  const meshesForTarget = useCallback((target: VehicleHitTarget): Mesh[] => {
+    if (target.type === 'window') return collectMeshes([windowRefs.current?.[target.target]?.object])
+    if (target.type === 'door') return collectMeshes(doorRefs.current?.[target.target]?.movingNodes ?? [])
+    if (target.type === 'frunk') return collectMeshes(hatchFrontRefs.current?.movingNodes ?? [])
+    if (target.type === 'trunk') {
+      return collectMeshes([
+        scene.getObjectByName(su7ConceptPack.nodeMap.trunk_outer_upper),
+        scene.getObjectByName(su7ConceptPack.nodeMap.trunk_outer_lip),
+        scene.getObjectByName(su7ConceptPack.nodeMap.rear_badges),
+      ])
+    }
+    const semanticIds = target.target === 'headlight'
+      ? ['headlight_left', 'headlight_right'] as const
+      : ['taillight_left', 'taillight_right'] as const
+    return collectMeshes(semanticIds.map((semanticId) => scene.getObjectByName(su7ConceptPack.nodeMap[semanticId])))
+  }, [scene])
+
   const handleVehiclePointerMove = useCallback((event: ThreeEvent<PointerEvent>) => {
-    renderer.domElement.style.cursor = resolveClickedPart(event.object) ? 'pointer' : 'grab'
-  }, [renderer, resolveClickedPart])
+    event.stopPropagation()
+    if (event.buttons !== 0) {
+      setHoverVisual(null)
+      renderer.domElement.style.cursor = 'grabbing'
+      return
+    }
+    const hit = resolveClickedPart(event.intersections)
+    if (!hit) {
+      setHoverVisual(null)
+      renderer.domElement.style.cursor = 'grab'
+      return
+    }
+    const meshes = meshesForTarget(hit)
+    if (!meshes.length) {
+      setHoverVisual(null)
+      renderer.domElement.style.cursor = 'grab'
+      return
+    }
+    const point = event.intersections[0]?.point?.clone() ?? event.point.clone()
+    setHoverVisual({ key: vehicleHitKey(hit), target: hit, meshes, point, label: vehicleHitLabel(hit) })
+    renderer.domElement.style.cursor = 'pointer'
+  }, [meshesForTarget, renderer, resolveClickedPart])
 
   const handleVehicleClick = useCallback((event: ThreeEvent<MouseEvent>) => {
-    if (event.delta > 4) return
-    const hit = resolveClickedPart(event.object)
-    if (!hit) return
     if (handledClickEvent.current === event.nativeEvent) return
     handledClickEvent.current = event.nativeEvent
     event.stopPropagation()
+    if (event.delta > 4) {
+      setHoverVisual(null)
+      return
+    }
+    const hit = resolveClickedPart(event.intersections)
+    if (!hit) return
+    const meshes = meshesForTarget(hit)
+    const point = event.intersections[0]?.point?.clone() ?? event.point.clone()
+    if (meshes.length) {
+      setPulseVisual({ key: vehicleHitKey(hit), target: hit, meshes, point, label: vehicleHitLabel(hit) })
+      setHoverVisual(null)
+      if (pulseTimer.current !== null) window.clearTimeout(pulseTimer.current)
+      pulseTimer.current = window.setTimeout(() => {
+        setPulseVisual(null)
+        pulseTimer.current = null
+      }, 200)
+    }
     const state = useExperienceStore.getState()
     if (state.stageMode === 'launch') state.setStageMode('studio')
     if (hit.type === 'window') {
@@ -524,7 +590,11 @@ export function VehicleModel() {
     const isOpen = state.vehiclePartStates.get('trunk') === 'open'
     const result = dispatchVehicleAction({ type: 'trunk', open: !isOpen })
     state.setNotice(`后备箱 · ${result.message}`)
-  }, [resolveClickedPart])
+  }, [meshesForTarget, resolveClickedPart])
+
+  useEffect(() => () => {
+    if (pulseTimer.current !== null) window.clearTimeout(pulseTimer.current)
+  }, [])
 
 
   useEffect(() => {
@@ -617,17 +687,15 @@ export function VehicleModel() {
       doorRefs.current = buildDoorRefs(scene, vehicleRoot.current)
       windowRefs.current = buildWindowRefs(scene, vehicleRoot.current)
       windowHitTargets.current = buildWindowHitTargets(scene, vehicleRoot.current)
-      lightHitTargets.current = buildLightHitTargets(scene, vehicleRoot.current)
       hatchRefs.current = buildHatchRefs(scene)
       hatchFrontRefs.current = buildHatchFrontRefs(scene, vehicleRoot.current)
-      partsHitTargets.current = buildPartsHitTargets(scene, vehicleRoot.current)
       vehicleClosedY.current = vehicleRoot.current.position.y
       ;(globalThis as unknown as { __AUDIT_WINDOW_REFS__: typeof windowRefs.current }).__AUDIT_WINDOW_REFS__ = windowRefs.current
       ;(globalThis as unknown as { __AUDIT_HATCH_REFS__: HatchNodeRefs | null }).__AUDIT_HATCH_REFS__ = hatchRefs.current
     }
     setModelStatus('ready')
     return () => {
-      ;[...windowHitTargets.current, ...lightHitTargets.current, ...partsHitTargets.current].forEach((target) => {
+      windowHitTargets.current.forEach((target) => {
         target.removeFromParent()
         target.geometry.dispose()
         const material = target.material
@@ -635,8 +703,6 @@ export function VehicleModel() {
         else material.dispose()
       })
       windowHitTargets.current = []
-      lightHitTargets.current = []
-      partsHitTargets.current = []
       renderer.domElement.style.cursor = 'grab'
     }
   }, [renderer, scene, setModelStatus, setNotice])
@@ -885,9 +951,30 @@ export function VehicleModel() {
     <group
       ref={vehicleRoot}
       onPointerMove={handleVehiclePointerMove}
-      onPointerOut={() => { renderer.domElement.style.cursor = 'grab' }}
+      onPointerOut={() => {
+        setHoverVisual(null)
+        renderer.domElement.style.cursor = 'grab'
+      }}
       onClick={handleVehicleClick}
     >
+      {hoverVisual?.meshes.map((mesh) => (
+        <VehicleMeshOutline key={`hover-${hoverVisual.key}-${mesh.uuid}`} mesh={mesh} />
+      ))}
+      {pulseVisual?.meshes.map((mesh) => (
+        <VehicleMeshOutline key={`pulse-${pulseVisual.key}-${mesh.uuid}`} mesh={mesh} pulse />
+      ))}
+      {hoverVisual && (
+        <Html
+          position={hoverVisual.point}
+          center
+          zIndexRange={[20, 10]}
+          style={{ pointerEvents: 'none' }}
+        >
+          <div className="vehicle-hover-anchor">
+            <div className="vehicle-hover-label">{hoverVisual.label}</div>
+          </div>
+        </Html>
+      )}
       <primitive
         object={scene}
         scale={su7ConceptPack.model.scale}

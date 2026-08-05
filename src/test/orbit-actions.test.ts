@@ -5,7 +5,11 @@ import { useExperienceStore } from '../store/experience-store'
 import { su7ConceptPack } from '../pack/su7-concept.pack'
 import type { WindowTarget } from '../types'
 import { Object3D } from 'three'
-import { resolveVehicleTargetFromHit, resolveWindowTargetFromHit } from '../runtime/window-hit-target'
+import {
+  resolveVehicleTargetFromHit,
+  resolveVehicleTargetFromIntersections,
+  resolveWindowTargetFromHit,
+} from '../runtime/window-hit-target'
 import { windowOpacityForProgress } from '../components/VehicleModel'
 
 describe('window glass concealment', () => {
@@ -322,6 +326,53 @@ describe('registered VehicleAction pipeline', () => {
       su7ConceptPack.nodeMap,
       su7ConceptPack.actions.hatch_rear.movingNodeIds,
     )).toEqual({ type: 'window', target: 'driver_front' })
+  })
+
+  it('treats the closest non-interactive body panel as an occluder', () => {
+    const visibleBody = new Object3D()
+    visibleBody.name = 'visible-body-panel'
+    const hiddenPassengerDoor = new Object3D()
+    hiddenPassengerDoor.userData.doorTarget = 'passenger_rear'
+
+    expect(resolveVehicleTargetFromIntersections(
+      [
+        { distance: 2, object: hiddenPassengerDoor },
+        { distance: 1, object: visibleBody },
+      ],
+      su7ConceptPack.nodeMap,
+      su7ConceptPack.actions.hatch_rear.movingNodeIds,
+    )).toBeNull()
+  })
+
+  it('keeps glass interaction ahead of its inherited door marker', () => {
+    const window = new Object3D()
+    window.name = su7ConceptPack.nodeMap.window_driver_front
+    window.userData.doorTarget = 'driver_front'
+
+    expect(resolveVehicleTargetFromHit(
+      window,
+      su7ConceptPack.nodeMap,
+      su7ConceptPack.actions.hatch_rear.movingNodeIds,
+    )).toEqual({ type: 'window', target: 'driver_front' })
+  })
+
+  it('uses visible rear-surface order for the light strip and XIAOMI badge', () => {
+    const badge = new Object3D()
+    badge.name = su7ConceptPack.nodeMap.rear_badges
+    const lightStrip = new Object3D()
+    lightStrip.name = su7ConceptPack.nodeMap.taillight_left
+    const movingIds = su7ConceptPack.actions.hatch_rear.movingNodeIds
+
+    expect(resolveVehicleTargetFromIntersections(
+      [{ distance: 1, object: badge }, { distance: 2, object: lightStrip }],
+      su7ConceptPack.nodeMap,
+      movingIds,
+    )).toEqual({ type: 'trunk' })
+    expect(resolveVehicleTargetFromIntersections(
+      [{ distance: 1, object: lightStrip }, { distance: 2, object: badge }],
+      su7ConceptPack.nodeMap,
+      movingIds,
+    )).toEqual({ type: 'lights', target: 'taillight' })
   })
 
   it('maps registered headlight, taillight and hatch meshes to direct-click targets', () => {

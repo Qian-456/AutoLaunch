@@ -1,4 +1,4 @@
-import type { Object3D } from 'three'
+import type { Intersection, Object3D } from 'three'
 import { DOOR_TARGETS, WINDOW_TARGETS } from '../pack/su7-concept.pack'
 import type { DoorTarget, WindowTarget } from '../types'
 
@@ -52,6 +52,11 @@ export function resolveVehicleTargetFromHit(
   nodeMap: Readonly<Record<string, string>>,
   hatchNodeIds: readonly string[],
 ): VehicleHitTarget | null {
+  // Glass is part of a door pivot, but its direct interaction remains the
+  // window action. Resolve it before the inherited doorTarget marker.
+  const windowTarget = resolveWindowTargetFromHit(object, nodeMap)
+  if (windowTarget) return { type: 'window', target: windowTarget }
+
   let cursor: Object3D | null = object
   while (cursor) {
     const directTarget = cursor.userData.vehicleHitTarget as string | undefined
@@ -61,8 +66,6 @@ export function resolveVehicleTargetFromHit(
     if (doorTarget && DOOR_TARGETS.includes(doorTarget)) return { type: 'door', target: doorTarget }
     cursor = cursor.parent
   }
-  const windowTarget = resolveWindowTargetFromHit(object, nodeMap)
-  if (windowTarget) return { type: 'window', target: windowTarget }
   if (lineageContainsMappedNode(object, ['headlight_left', 'headlight_right'], nodeMap)) {
     return { type: 'lights', target: 'headlight' }
   }
@@ -77,4 +80,22 @@ export function resolveVehicleTargetFromHit(
   }
   if (lineageContainsMappedNode(object, ['trunk', ...hatchNodeIds], nodeMap)) return { type: 'trunk' }
   return null
+}
+
+/**
+ * Resolve only the closest visible intersection. A non-interactive body panel
+ * is an intentional occluder: targets on the far side of the vehicle must not
+ * receive the click through it.
+ */
+export function resolveVehicleTargetFromIntersections(
+  intersections: readonly Pick<Intersection<Object3D>, 'distance' | 'object'>[],
+  nodeMap: Readonly<Record<string, string>>,
+  hatchNodeIds: readonly string[],
+): VehicleHitTarget | null {
+  const nearest = intersections.reduce<(typeof intersections)[number] | undefined>(
+    (closest, intersection) => !closest || intersection.distance < closest.distance ? intersection : closest,
+    undefined,
+  )
+  if (!nearest) return null
+  return resolveVehicleTargetFromHit(nearest.object, nodeMap, hatchNodeIds)
 }
