@@ -1,6 +1,6 @@
 import type { Object3D } from 'three'
-import { WINDOW_TARGETS } from '../pack/su7-concept.pack'
-import type { WindowTarget } from '../types'
+import { DOOR_TARGETS, WINDOW_TARGETS } from '../pack/su7-concept.pack'
+import type { DoorTarget, WindowTarget } from '../types'
 
 type ConcreteWindowTarget = Exclude<WindowTarget, 'all'>
 
@@ -8,6 +8,8 @@ export type VehicleHitTarget =
   | { type: 'window'; target: ConcreteWindowTarget }
   | { type: 'lights'; target: 'headlight' | 'taillight' }
   | { type: 'trunk' }
+  | { type: 'frunk' }
+  | { type: 'door'; target: Exclude<DoorTarget, 'all'> }
 
 /**
  * Resolve a raycast hit back to a semantic window target. The raycaster may
@@ -52,8 +54,11 @@ export function resolveVehicleTargetFromHit(
 ): VehicleHitTarget | null {
   let cursor: Object3D | null = object
   while (cursor) {
-    const directTarget = cursor.userData.vehicleHitTarget as 'headlight' | 'taillight' | undefined
-    if (directTarget) return { type: 'lights', target: directTarget }
+    const directTarget = cursor.userData.vehicleHitTarget as string | undefined
+    if (directTarget === 'headlight' || directTarget === 'taillight') return { type: 'lights', target: directTarget }
+    if (directTarget === 'frunk') return { type: 'frunk' }
+    const doorTarget = cursor.userData.doorTarget as Exclude<DoorTarget, 'all'> | undefined
+    if (doorTarget && DOOR_TARGETS.includes(doorTarget)) return { type: 'door', target: doorTarget }
     cursor = cursor.parent
   }
   const windowTarget = resolveWindowTargetFromHit(object, nodeMap)

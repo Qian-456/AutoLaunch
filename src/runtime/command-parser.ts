@@ -1,4 +1,4 @@
-import type { VehicleAction, WindowTarget } from '../types'
+import type { DoorTarget, VehicleAction, WindowTarget } from '../types'
 
 export type ParseResult =
   | { matched: true; action: VehicleAction }
@@ -70,7 +70,9 @@ const closeVerbs = /(关闭|升起|关上|升|关|升到|关闭到|升至|上到
 
 function parseWindowCommand(normalized: string): ParseResult | null {
   const explicitProgress = extractProgress(normalized)
-  const namesWindow = /(车)?窗|window/i.test(normalized)
+  const namesWindow = /(车窗|开窗|关窗|window)/i.test(normalized)
+    || windowSpecs.some(([pattern]) => pattern.test(normalized))
+    || allWindowsSpec.test(normalized)
   const progressOnlyWindowCommand = explicitProgress !== undefined
     && (openVerbs.test(normalized) || closeVerbs.test(normalized))
     && !/(后备箱|尾门|灯|trunk|light)/i.test(normalized)
@@ -110,6 +112,40 @@ function parseWindowCommand(normalized: string): ParseResult | null {
   return { matched: true, action: { type: 'window', target, open, progress } }
 }
 
+const doorSpecs: Array<[RegExp, Exclude<DoorTarget, 'all'>]> = [
+  [/主驾后(排)?车门|左后门|开门后主驾|driverdoorrear|doordriverrear/i, 'driver_rear'],
+  [/副驾后(排)?车门|右后门|开门后副驾|passengerdoorrear|doorpassengerrear/i, 'passenger_rear'],
+  [/副驾(驶)?(前)?车门|右前门|开门副驾|passengerdoorfront|doorpassengerfront/i, 'passenger_front'],
+  [/主驾(驶)?(前)?车门|左前门|开门主驾|driverdoorfront|doordriverfront/i, 'driver_front'],
+]
+const allDoorsSpec = /(全部|所有|四个|全车)(车门|门)|alldoors/i
+const doorOpenVerbs = /(打开|开启|拉开|推开|开)/
+const doorCloseVerbs = /(关上|关闭|带上|推上|关)/
+
+function parseDoorCommand(normalized: string): ParseResult | null {
+  if (!/(车门|左前门|右前门|左后门|右后门|door)/i.test(normalized)) return null
+  let target: DoorTarget | null = allDoorsSpec.test(normalized) ? 'all' : null
+  if (!target) {
+    for (const [pattern, candidate] of doorSpecs) {
+      if (pattern.test(normalized)) {
+        target = candidate
+        break
+      }
+    }
+  }
+  if (!target) return null
+  const closes = doorCloseVerbs.test(normalized) || /close/i.test(normalized)
+  const opens = doorOpenVerbs.test(normalized) || /open/i.test(normalized)
+  if (!opens && !closes) return null
+  const open = opens && !closes
+  return { matched: true, action: { type: 'door', target, open, progress: open ? 100 : 0 } }
+}
+
+const frunkCommands: Array<[RegExp, VehicleAction]> = [
+  [/^(打开前备箱|开前备箱|开启前箱|前引擎盖打开|打开前引擎盖|打开前盖|开前盖|掀前盖|frunkopen|openfrunk)$/, { type: 'hatch', target: 'front_hatch', open: true, progress: 100 }],
+  [/^(关闭前备箱|关前备箱|关上前箱|前引擎盖关闭|关闭前盖|关前盖|盖上前盖|frunkclose|closefrunk)$/, { type: 'hatch', target: 'front_hatch', open: false, progress: 0 }],
+]
+
 const orbitCommands: Array<[RegExp, VehicleAction]> = [
   [/^(参考图视角|前左视角|英雄视角|hero)$/, { type: 'orbit', preset: 'hero_front_left' }],
   [/^(看正面|正面视角|转到正面|front)$/, { type: 'orbit', preset: 'front' }],
@@ -128,7 +164,7 @@ const simpleCommands: Array<[RegExp, VehicleAction]> = [
 ]
 
 const FALLBACK_SUGGESTION =
-  '暂不支持该命令，请尝试：打开主驾车窗、主驾车窗50%、全部车窗打开'
+  '暂不支持该命令，请尝试：打开主驾车窗、打开主驾车门、打开前备箱'
 
 export function parseCommand(input: string): ParseResult {
   const normalized = input
@@ -139,6 +175,12 @@ export function parseCommand(input: string): ParseResult {
 
   const orbit = orbitCommands.find(([pattern]) => pattern.test(normalized))
   if (orbit) return { matched: true, action: orbit[1] }
+
+  const doorResult = parseDoorCommand(normalized)
+  if (doorResult) return doorResult
+
+  const frunk = frunkCommands.find(([pattern]) => pattern.test(normalized))
+  if (frunk) return { matched: true, action: frunk[1] }
 
   const windowResult = parseWindowCommand(normalized)
   if (windowResult) return windowResult

@@ -158,7 +158,7 @@ describe('registered VehicleAction pipeline', () => {
   it('returns the fixed vehicle-action suggestion for unknown commands', () => {
     expect(parseCommand('起飞')).toEqual({
       matched: false,
-      suggestion: '暂不支持该命令，请尝试：打开主驾车窗、主驾车窗50%、全部车窗打开',
+      suggestion: '暂不支持该命令，请尝试：打开主驾车窗、打开主驾车门、打开前备箱',
     })
   })
 

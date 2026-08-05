@@ -4,7 +4,7 @@ import { useProgress } from '@react-three/drei'
 import { ACESFilmicToneMapping, SRGBColorSpace } from 'three'
 import { Experience } from './components/Experience'
 import { LaunchPlayer } from './components/LaunchPlayer'
-import { su7ConceptPack, WINDOW_LABELS, WINDOW_TARGETS } from './pack/su7-concept.pack'
+import { DOOR_LABELS, DOOR_TARGETS, su7ConceptPack, WINDOW_LABELS, WINDOW_TARGETS } from './pack/su7-concept.pack'
 import { parseCommand } from './runtime/command-parser'
 import { dispatchVehicleAction } from './runtime/action-dispatcher'
 import { createBrowserSpeechRecognition, type BrowserSpeechRecognition } from './runtime/browser-speech'
@@ -20,7 +20,7 @@ const orbitButtons: Array<{ preset: OrbitPreset; label: string }> = [
   { preset: 'turntable', label: '自动运镜' },
 ]
 
-const commandExamples = ['打开主驾车窗', '副驾车窗50%', '打开后备箱', '开灯'] as const
+const commandExamples = ['打开主驾车窗', '打开主驾车门', '全部车门打开', '打开前备箱', '打开后备箱', '开灯'] as const
 
 const singleVehicleControls: Array<{
   id: 'trunk' | 'headlight' | 'taillight'
@@ -85,6 +85,8 @@ export function App() {
   const voiceState = useExperienceStore((state) => state.inputMode.voice)
   const windowProgress = useExperienceStore((state) => state.windowProgress)
   const trunkState = useExperienceStore((state) => state.vehiclePartStates.get('trunk'))
+  const frunkState = useExperienceStore((state) => state.vehiclePartStates.get('hatch_front'))
+  const vehiclePartStates = useExperienceStore((state) => state.vehiclePartStates)
   const trunkTargetOpen = useExperienceStore((state) => {
     for (const execution of state.activeActions.values()) {
       if (execution.action.type === 'hatch' || execution.action.type === 'trunk') {
@@ -381,6 +383,46 @@ export function App() {
                   </div>
                 )
               })}
+            </div>
+            <div className="deck-heading" style={{ marginTop: 12 }}>
+              <span>车门与前备箱</span>
+              <strong>真实外门皮 · 独立铰链</strong>
+            </div>
+            <div className="vehicle-buttons">
+              {DOOR_TARGETS.map((target) => {
+                const active = vehiclePartStates.get(`door_${target}`) === 'open'
+                return (
+                  <button
+                    key={target}
+                    className={active ? 'active' : ''}
+                    disabled={modelStatus !== 'ready'}
+                    onClick={() => runVehicleAction({ type: 'door', target, open: !active, progress: active ? 0 : 100 })}
+                    aria-pressed={active}
+                  >
+                    <span aria-hidden="true" />
+                    {DOOR_LABELS[target]}
+                    <small>{active ? 'OPEN' : 'CLOSED'}</small>
+                  </button>
+                )
+              })}
+              <button
+                disabled={modelStatus !== 'ready'}
+                onClick={() => runVehicleAction({ type: 'door', target: 'all', open: true, progress: 100 })}
+              >全部开门</button>
+              <button
+                disabled={modelStatus !== 'ready'}
+                onClick={() => runVehicleAction({ type: 'door', target: 'all', open: false, progress: 0 })}
+              >全部关门</button>
+              <button
+                className={frunkState === 'open' ? 'active' : ''}
+                disabled={modelStatus !== 'ready'}
+                onClick={() => runVehicleAction({ type: 'trunk', frunk: true, open: frunkState !== 'open' })}
+                aria-pressed={frunkState === 'open'}
+              >
+                <span aria-hidden="true" />
+                前备箱
+                <small>{frunkState === 'open' ? 'OPEN' : 'CLOSED'}</small>
+              </button>
             </div>
             <div className="deck-heading" style={{ marginTop: 12 }}>
               <span>其他部件</span>

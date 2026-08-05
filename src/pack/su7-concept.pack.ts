@@ -1,4 +1,17 @@
-import type { LaunchChapter, OrbitActionDefinition, OrbitPreset, WindowTarget } from '../types'
+import type { DoorTarget, LaunchChapter, OrbitActionDefinition, OrbitPreset, WindowTarget } from '../types'
+
+type ConcreteDoorTarget = Exclude<DoorTarget, 'all'>
+
+const degreesToRadians = (degrees: number) => degrees * Math.PI / 180
+const configuredAngle = (value: string | undefined, fallback: number) => {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? degreesToRadians(parsed) : degreesToRadians(fallback)
+}
+
+export const PARTS_VIRTUAL_HINT = import.meta.env.VITE_PARTS_VIRTUAL_HINT
+  || '⚠ 当前演示模型部分开合节点暂未映射，已使用虚拟占位演示；v0.3 后续迭代将接入真实部件 Mesh。'
+const DEFAULT_FRUNK_OPEN_ANGLE = configuredAngle(import.meta.env.VITE_PARTS_DEFAULT_OPEN_ANGLE_FRUNK, 55)
+const DEFAULT_DOOR_OPEN_ANGLE = configuredAngle(import.meta.env.VITE_PARTS_DEFAULT_OPEN_ANGLE_DOOR, 63)
 
 /**
  * Per-window action definition.
@@ -40,7 +53,7 @@ export type WindowActionDefinition = {
 /** Rear hatch assembled from registered GLB parts under one hinge pivot. */
 export type HatchActionDefinition = {
   durationMs: number
-  conflictGroup: 'rear'
+  conflictGroup: 'rear' | 'front_hatch'
   /** Pivot axis in the original GLB coordinate system. */
   hingeAxis: 'X'
   /**
@@ -53,18 +66,46 @@ export type HatchActionDefinition = {
   openRotation: number
   reversible: true
   /** Semantic node-map IDs which together form the moving tailgate. */
-  movingNodeIds: readonly [
-    'trunk_outer_upper',
-    'trunk_outer_lip',
-    'trunk_inner_liner',
-    'rear_badges',
-    'trunk_spoiler_base',
-    'trunk_spoiler',
-    'trunk_spoiler_support',
-    'trunk_taillight_lens',
-    'trunk_taillight_housing',
-    'trunk_taillight_emitter',
-  ]
+  movingNodeIds: readonly string[]
+  virtualHatch?: {
+    position: readonly [number, number, number]
+    size: readonly [number, number, number]
+    rotation: readonly [number, number, number]
+    hingeOffset: readonly [number, number, number]
+    openAngle: number
+    color: string
+  }
+}
+
+export type DoorActionDefinition = {
+  durationMs: number
+  conflictGroup: string
+  hingeAxis: 'Y'
+  hingePosition: readonly [number, number, number]
+  closedRotation: number
+  openRotation: number
+  reversible: true
+  movingNodeIds: readonly string[]
+  virtualDoor: {
+    position: readonly [number, number, number]
+    size: readonly [number, number, number]
+    rotation: readonly [number, number, number]
+    hingeSideOffset: readonly [number, number, number]
+    openAngle: number
+    outerColor: string
+    innerColor: string
+  }
+}
+
+export const DOOR_TARGETS: readonly ConcreteDoorTarget[] = [
+  'driver_front', 'passenger_front', 'driver_rear', 'passenger_rear',
+]
+
+export const DOOR_LABELS: Record<ConcreteDoorTarget, string> = {
+  driver_front: '主驾车门',
+  passenger_front: '副驾车门',
+  driver_rear: '主驾后车门',
+  passenger_rear: '副驾后车门',
 }
 
 export const su7ConceptPack = {
@@ -119,6 +160,30 @@ export const su7ConceptPack = {
     rear_body_upper: 'XiaomicarPaint_8_carPaint_8_pasted__lambert222_001',
     rear_body_lip: 'XiaomicarPaint_2_carPaint_2_pasted__lambert222_001',
     taillight_rear_housing: 'XiaomicarLightPlastic_BrilliantBlack_2_carLightPlastic_BrilliantBlack_2_lambert230',
+    hatch_front_bonnet_net: 'XiaomicarFrontBonnetNet_carFrontBonnetNet_blinn10',
+    hatch_front_outer: 'XiaomicarPaint_3_1_carPaint_3_1_pasted__lambert222_001',
+    door_driver_front_inner: 'XiaomicarInternal_DoorFront_carInternal_DoorFront_lambert2_001',
+    door_passenger_front_inner: 'XiaomicarInternal_DoorFront_1__carInternal_DoorFront_001_lambert2_001',
+    door_driver_rear_inner: 'XiaomicarInternal_DoorBack_carInternal_DoorBack_lambert2_001',
+    door_passenger_rear_inner: 'XiaomicarInternal_DoorBack_1__carInternal_DoorBack_001_lambert2_001',
+    door_driver_front_outer: 'XiaomicarPaint_4_carPaint_4_pasted__lambert222_001',
+    door_passenger_front_outer: 'XiaomicarPaint_6_carPaint_6_pasted__lambert222_001',
+    door_driver_rear_outer: 'XiaomicarPaint_5_carPaint_5_pasted__lambert222_001',
+    door_passenger_rear_outer: 'XiaomicarPaint_7_carPaint_7_pasted__lambert222_001',
+    door_driver_front_window_trim: 'XiaomicarWindowTrim_1_carWindowTrim_1_Material_#49',
+    door_passenger_front_window_trim: 'XiaomicarWindowTrim_3_carWindowTrim_3_Material_#49',
+    door_driver_rear_window_trim: 'XiaomicarWindowTrim_2_carWindowTrim_2_Material_#49',
+    door_passenger_rear_window_trim: 'XiaomicarWindowTrim_4_carWindowTrim_4_Material_#49',
+    door_driver_front_corner_trim: 'XiaomicarPlastic_BrilliantBlack_1_6_carPlastic_BrilliantBlack_1_6_Material_#49',
+    door_passenger_front_corner_trim: 'XiaomicarPlastic_BrilliantBlack_1_7_carPlastic_BrilliantBlack_1_7_Material_#49',
+    door_driver_front_mirror_top: 'XiaomicarMirror_top_2_carMirror_top_2_pasted__lambert222_001',
+    door_driver_front_mirror_bottom: 'XiaomicarMirror_bottom_2_carMirror_bottom_2_lambert222',
+    door_driver_front_mirror_glass: 'XiaomicarRearviewMirror_2_carRearviewMirror_2_Car_paint',
+    door_driver_front_mirror_base: 'XiaomicarPlastic_BrilliantBlack_3_2_carPlastic_BrilliantBlack_3_2_Material_#49',
+    door_passenger_front_mirror_top: 'XiaomicarMirror_top_1_carMirror_top_1_lambert222',
+    door_passenger_front_mirror_bottom: 'XiaomicarMirror_bottom_1_carMirror_bottom_1_lambert222',
+    door_passenger_front_mirror_glass: 'XiaomicarRearviewMirror_1_carRearviewMirror_1_Car_paint',
+    door_passenger_front_mirror_base: 'XiaomicarPlastic_BrilliantBlack_3_1_carPlastic_BrilliantBlack_3_1_Material_#49',
   },
   actions: {
     window_driver_front: {
@@ -216,6 +281,60 @@ export const su7ConceptPack = {
         'trunk_taillight_emitter',
       ] as const,
     } satisfies HatchActionDefinition,
+    hatch_front: {
+      durationMs: 1650,
+      conflictGroup: 'front_hatch',
+      hingeAxis: 'X',
+      // The bonnet pivots at its rear edge beside the windscreen. Using the
+      // nose-side bound here makes the real skin appear to slide forward.
+      hingePosition: [0, 0.0088, 0.01066] as const,
+      closedRotation: 0,
+      openRotation: -DEFAULT_FRUNK_OPEN_ANGLE,
+      reversible: true,
+      movingNodeIds: ['hatch_front_outer', 'front_logo_base', 'front_logo_mark'] as const,
+      virtualHatch: {
+        position: [-1.48, 0.82, 0] as const,
+        size: [1.55, 0.06, 1.90] as const,
+        rotation: [0, 0, 0] as const,
+        hingeOffset: [0.72, 0, 0] as const,
+        openAngle: -DEFAULT_FRUNK_OPEN_ANGLE,
+        color: '#0a1015',
+      },
+    } satisfies HatchActionDefinition,
+    door_driver_front: {
+      durationMs: 1700, conflictGroup: 'door_driver_front', hingeAxis: 'Y',
+      hingePosition: [0.0084, 0.0065, 0.0094] as const, closedRotation: 0, openRotation: -DEFAULT_DOOR_OPEN_ANGLE,
+      reversible: true, movingNodeIds: [
+        'door_driver_front_outer', 'door_driver_front_inner', 'window_driver_front',
+        'door_driver_front_window_trim', 'door_driver_front_corner_trim',
+        'door_driver_front_mirror_top', 'door_driver_front_mirror_bottom',
+        'door_driver_front_mirror_glass', 'door_driver_front_mirror_base',
+      ] as const,
+      virtualDoor: { position: [-0.25, 0.80, -1.02] as const, size: [1.05, 1.30, 0.08] as const, rotation: [0, 0, 0] as const, hingeSideOffset: [-0.52, 0, 0] as const, openAngle: DEFAULT_DOOR_OPEN_ANGLE, outerColor: '#0b1016', innerColor: '#1a1f24' },
+    } satisfies DoorActionDefinition,
+    door_passenger_front: {
+      durationMs: 1700, conflictGroup: 'door_passenger_front', hingeAxis: 'Y',
+      hingePosition: [-0.0084, 0.0065, 0.0094] as const, closedRotation: 0, openRotation: DEFAULT_DOOR_OPEN_ANGLE,
+      reversible: true, movingNodeIds: [
+        'door_passenger_front_outer', 'door_passenger_front_inner', 'window_passenger_front',
+        'door_passenger_front_window_trim', 'door_passenger_front_corner_trim',
+        'door_passenger_front_mirror_top', 'door_passenger_front_mirror_bottom',
+        'door_passenger_front_mirror_glass', 'door_passenger_front_mirror_base',
+      ] as const,
+      virtualDoor: { position: [-0.25, 0.80, 1.02] as const, size: [1.05, 1.30, 0.08] as const, rotation: [0, 0, 0] as const, hingeSideOffset: [-0.52, 0, 0] as const, openAngle: -DEFAULT_DOOR_OPEN_ANGLE, outerColor: '#0b1016', innerColor: '#1a1f24' },
+    } satisfies DoorActionDefinition,
+    door_driver_rear: {
+      durationMs: 1650, conflictGroup: 'door_driver_rear', hingeAxis: 'Y',
+      hingePosition: [0.0085, 0.0067, -0.0017] as const, closedRotation: 0, openRotation: -1.0,
+      reversible: true, movingNodeIds: ['door_driver_rear_outer', 'door_driver_rear_inner', 'window_driver_rear', 'door_driver_rear_window_trim'] as const,
+      virtualDoor: { position: [0.95, 0.80, -1.02] as const, size: [0.90, 1.30, 0.08] as const, rotation: [0, 0, 0] as const, hingeSideOffset: [-0.45, 0, 0] as const, openAngle: 1.0, outerColor: '#0b1016', innerColor: '#1a1f24' },
+    } satisfies DoorActionDefinition,
+    door_passenger_rear: {
+      durationMs: 1650, conflictGroup: 'door_passenger_rear', hingeAxis: 'Y',
+      hingePosition: [-0.0085, 0.0067, -0.0017] as const, closedRotation: 0, openRotation: 1.0,
+      reversible: true, movingNodeIds: ['door_passenger_rear_outer', 'door_passenger_rear_inner', 'window_passenger_rear', 'door_passenger_rear_window_trim'] as const,
+      virtualDoor: { position: [0.95, 0.80, 1.02] as const, size: [0.90, 1.30, 0.08] as const, rotation: [0, 0, 0] as const, hingeSideOffset: [-0.45, 0, 0] as const, openAngle: -1.0, outerColor: '#0b1016', innerColor: '#1a1f24' },
+    } satisfies DoorActionDefinition,
     trunk: {
       durationMs: 1200,
       conflictGroup: 'rear',

@@ -5,14 +5,18 @@ import { Box3, BoxGeometry, Color, Group, MathUtils, Mesh, MeshBasicMaterial, Me
 import { SkeletonUtils } from 'three/examples/jsm/Addons.js'
 import { KTX2Loader, type GLTFLoader } from 'three-stdlib'
 import {
+  DOOR_LABELS,
+  DOOR_TARGETS,
   HatchActionDefinition,
+  PARTS_VIRTUAL_HINT,
   WINDOW_TARGETS,
   WINDOW_LABELS,
   su7ConceptPack,
   type WindowActionDefinition,
+  type DoorActionDefinition,
 } from '../pack/su7-concept.pack'
 import { useExperienceStore } from '../store/experience-store'
-import type { ActiveVehicleAction, WindowTarget } from '../types'
+import type { ActiveVehicleAction, DoorTarget, WindowTarget } from '../types'
 import { dispatchVehicleAction } from '../runtime/action-dispatcher'
 import { resolveVehicleTargetFromHit } from '../runtime/window-hit-target'
 import { VehicleLightEffects } from './VehicleLightEffects'
@@ -53,6 +57,17 @@ type HatchAnimation = {
   definition: HatchActionDefinition
   fromRotation: number
   toRotation: number
+  rotationAxis: 'x' | 'z'
+  isVirtual: boolean
+  startedAt: number
+}
+
+type DoorAnimation = {
+  kind: 'door'
+  execution: ActiveVehicleAction
+  pivot: Group
+  fromRotation: number
+  toRotation: number
   startedAt: number
 }
 
@@ -84,7 +99,7 @@ type FallbackAnimation = {
   startedAt: number
 }
 
-type RuntimeAnimation = WindowAnimation | HatchAnimation | TrunkAnimation | LightAnimation | FallbackAnimation
+type RuntimeAnimation = WindowAnimation | HatchAnimation | DoorAnimation | TrunkAnimation | LightAnimation | FallbackAnimation
 
 type WindowNodeRefs = {
   object: Object3D
@@ -103,8 +118,11 @@ type HatchNodeRefs = {
   definition: HatchActionDefinition
   /** Optional cached rotation at the closed pose (used for timeouts/rollback). */
   closedRotation: number
+  rotationAxis: 'x' | 'z'
+  isVirtual: boolean
 }
 
+type DoorNodeRefs = { pivot: Group; definition: DoorActionDefinition; movingNodes: Object3D[] }
 function collectStandardMaterials(root: Object3D | null | undefined) {
   const materials: MeshStandardMaterial[] = []
   root?.traverse((object) => {
@@ -316,7 +334,7 @@ function applyVirtualWindowPosition(
 function buildHatchRefs(scene: Object3D): HatchNodeRefs | null {
   const definition = su7ConceptPack.actions.hatch_rear as HatchActionDefinition
   const movingNodes = definition.movingNodeIds
-    .map((semanticId) => scene.getObjectByName(su7ConceptPack.nodeMap[semanticId]))
+    .map((semanticId) => scene.getObjectByName(su7ConceptPack.nodeMap[semanticId as keyof typeof su7ConceptPack.nodeMap]))
     .filter((node): node is Object3D => Boolean(node))
   if (movingNodes.length !== definition.movingNodeIds.length) return null
 
@@ -333,7 +351,96 @@ function buildHatchRefs(scene: Object3D): HatchNodeRefs | null {
     movingNodes,
     definition,
     closedRotation: definition.closedRotation,
+    rotationAxis: 'x',
+    isVirtual: false,
   }
+}
+
+/** Build the front hatch from registered nodes, falling back to a pack-declared virtual lid. */
+export function buildHatchFrontRefs(scene: Object3D, vehicleRoot: Group): HatchNodeRefs {
+  const definition = su7ConceptPack.actions.hatch_front as HatchActionDefinition
+  const movingNodes = definition.movingNodeIds
+    .map((semanticId) => scene.getObjectByName(su7ConceptPack.nodeMap[semanticId as keyof typeof su7ConceptPack.nodeMap]))
+    .filter((node): node is Object3D => Boolean(node))
+  if (movingNodes.length === definition.movingNodeIds.length) {
+    const pivot = new Group()
+    pivot.name = 'Hatch_Pivot_front_hatch'
+    pivot.position.set(...definition.hingePosition)
+    scene.add(pivot)
+    scene.updateMatrixWorld(true)
+    movingNodes.forEach((node) => pivot.attach(node))
+    return { pivot, movingNodes, definition, closedRotation: definition.closedRotation, rotationAxis: 'x', isVirtual: false }
+  }
+  const virtual = definition.virtualHatch!
+  const pivot = new Group()
+  pivot.name = 'VirtualHatch_front'
+  pivot.position.set(
+    virtual.position[0] + virtual.hingeOffset[0],
+    virtual.position[1] + virtual.hingeOffset[1],
+    virtual.position[2] + virtual.hingeOffset[2],
+  )
+  const material = new MeshStandardMaterial({ color: virtual.color, metalness: 0.35, roughness: 0.4 })
+  const lid = new Mesh(new BoxGeometry(...virtual.size), material)
+  lid.position.set(-virtual.hingeOffset[0], -virtual.hingeOffset[1], -virtual.hingeOffset[2])
+  lid.rotation.set(...virtual.rotation)
+  pivot.add(lid)
+  pivot.visible = false
+  vehicleRoot.add(pivot)
+  const virtualDefinition = { ...definition, openRotation: virtual.openAngle }
+  return { pivot, movingNodes: [lid], definition: virtualDefinition, closedRotation: definition.closedRotation, rotationAxis: 'z', isVirtual: true }
+}
+
+/** Build one GLB-local hinge per door from its registered outer skin, inner panel and window. */
+export function buildDoorRefs(scene: Object3D, vehicleRoot: Group): Record<Exclude<DoorTarget, 'all'>, DoorNodeRefs> {
+  const refs = {} as Record<Exclude<DoorTarget, 'all'>, DoorNodeRefs>
+  scene.updateMatrixWorld(true)
+  vehicleRoot.updateMatrixWorld(true)
+  for (const target of DOOR_TARGETS) {
+    const definition = su7ConceptPack.actions[`door_${target}`] as DoorActionDefinition
+    const movingNodes = definition.movingNodeIds
+      .map((semanticId) => scene.getObjectByName(su7ConceptPack.nodeMap[semanticId as keyof typeof su7ConceptPack.nodeMap]))
+      .filter((node): node is Object3D => Boolean(node))
+    const pivot = new Group()
+    pivot.name = `Door_Pivot_${target}`
+    pivot.position.set(...definition.hingePosition)
+    scene.add(pivot)
+    scene.updateMatrixWorld(true)
+    movingNodes.forEach((node) => pivot.attach(node))
+    movingNodes.forEach((node) => { node.userData.doorTarget = target })
+    refs[target] = { pivot, definition, movingNodes }
+  }
+  return refs
+}
+
+/** Create fixed click proxies from the closed-pose bounds of real door skins and hood. */
+function buildPartsHitTargets(scene: Object3D, vehicleRoot: Group): Mesh[] {
+  scene.updateWorldMatrix(true, true)
+  vehicleRoot.updateWorldMatrix(true, true)
+  const specs = [
+    ...DOOR_TARGETS.map((target) => ({
+      name: `DoorHitTarget_${target}`,
+      node: scene.getObjectByName(su7ConceptPack.nodeMap[`door_${target}_outer`]),
+      doorTarget: target,
+    })),
+    { name: 'FrunkHitTarget', node: scene.getObjectByName(su7ConceptPack.nodeMap.hatch_front_outer), vehicleHitTarget: 'frunk' },
+  ]
+  return specs.flatMap((spec) => {
+    if (!spec.node) return []
+    const bounds = new Box3().setFromObject(spec.node)
+    if (bounds.isEmpty()) return []
+    const size = bounds.getSize(new Vector3())
+    const center = vehicleRoot.worldToLocal(bounds.getCenter(new Vector3()))
+    const material = new MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })
+    material.colorWrite = false
+    const proxy = new Mesh(new BoxGeometry(Math.max(size.x, 0.08), Math.max(size.y, 0.08), Math.max(size.z, 0.08)), material)
+    proxy.name = spec.name
+    proxy.position.copy(center)
+    if ('doorTarget' in spec) proxy.userData.doorTarget = spec.doorTarget
+    if ('vehicleHitTarget' in spec) proxy.userData.vehicleHitTarget = spec.vehicleHitTarget
+    proxy.frustumCulled = false
+    vehicleRoot.add(proxy)
+    return [proxy]
+  })
 }
 
 export function VehicleModel() {
@@ -351,6 +458,9 @@ export function VehicleModel() {
   const windowHitTargets = useRef<Mesh[]>([])
   const lightHitTargets = useRef<Mesh[]>([])
   const hatchRefs = useRef<HatchNodeRefs | null>(null)
+  const hatchFrontRefs = useRef<HatchNodeRefs | null>(null)
+  const doorRefs = useRef<Record<Exclude<DoorTarget, 'all'>, DoorNodeRefs> | null>(null)
+  const partsHitTargets = useRef<Mesh[]>([])
   const handledClickEvent = useRef<Event | null>(null)
   const vehicleClosedY = useRef(0)
   const runtimeAnimations = useRef(new Map<string, RuntimeAnimation>())
@@ -399,6 +509,18 @@ export function VehicleModel() {
       state.setNotice(`${hit.target === 'headlight' ? '大灯' : '尾灯'} · ${result.message}`)
       return
     }
+    if (hit.type === 'door') {
+      const isOpen = state.vehiclePartStates.get(`door_${hit.target}`) === 'open'
+      const result = dispatchVehicleAction({ type: 'door', target: hit.target, open: !isOpen, progress: isOpen ? 0 : 100 })
+      state.setNotice(`${DOOR_LABELS[hit.target]} · ${result.message}`)
+      return
+    }
+    if (hit.type === 'frunk') {
+      const isOpen = state.vehiclePartStates.get('hatch_front') === 'open'
+      const result = dispatchVehicleAction({ type: 'hatch', target: 'front_hatch', open: !isOpen, progress: isOpen ? 0 : 100 })
+      state.setNotice(`前备箱 · ${result.message}`)
+      return
+    }
     const isOpen = state.vehiclePartStates.get('trunk') === 'open'
     const result = dispatchVehicleAction({ type: 'trunk', open: !isOpen })
     state.setNotice(`后备箱 · ${result.message}`)
@@ -412,13 +534,16 @@ export function VehicleModel() {
     console.info('[AutoLaunch] GLB nodes:', scene.children.map((node) => node.name))
     if (missingNodes.length) {
       console.warn(`[AutoLaunch] missing node-map entries: ${JSON.stringify(missingNodes)}`)
+      const newPartNodeMissing = missingNodes.some((id) => id.startsWith('door_') || id.startsWith('hatch_front_'))
       const actionNodeMissing = missingNodes.some((id) => (
         id.startsWith('window_')
         || id.startsWith('trunk_')
         || id.startsWith('headlight_')
         || id.startsWith('taillight_')
       ))
-      setNotice(actionNodeMissing
+      setNotice(newPartNodeMissing
+        ? PARTS_VIRTUAL_HINT
+        : actionNodeMissing
         ? '⚠ 当前演示模型部分动作节点暂未映射，相关动作将使用降级展示。'
         : '⚠ 当前模型部分外观节点暂未映射，已跳过对应材质覆盖；核心动作仍可使用。')
     }
@@ -489,17 +614,20 @@ export function VehicleModel() {
     })
 
     if (vehicleRoot.current) {
+      doorRefs.current = buildDoorRefs(scene, vehicleRoot.current)
       windowRefs.current = buildWindowRefs(scene, vehicleRoot.current)
       windowHitTargets.current = buildWindowHitTargets(scene, vehicleRoot.current)
       lightHitTargets.current = buildLightHitTargets(scene, vehicleRoot.current)
       hatchRefs.current = buildHatchRefs(scene)
+      hatchFrontRefs.current = buildHatchFrontRefs(scene, vehicleRoot.current)
+      partsHitTargets.current = buildPartsHitTargets(scene, vehicleRoot.current)
       vehicleClosedY.current = vehicleRoot.current.position.y
       ;(globalThis as unknown as { __AUDIT_WINDOW_REFS__: typeof windowRefs.current }).__AUDIT_WINDOW_REFS__ = windowRefs.current
       ;(globalThis as unknown as { __AUDIT_HATCH_REFS__: HatchNodeRefs | null }).__AUDIT_HATCH_REFS__ = hatchRefs.current
     }
     setModelStatus('ready')
     return () => {
-      ;[...windowHitTargets.current, ...lightHitTargets.current].forEach((target) => {
+      ;[...windowHitTargets.current, ...lightHitTargets.current, ...partsHitTargets.current].forEach((target) => {
         target.removeFromParent()
         target.geometry.dispose()
         const material = target.material
@@ -508,6 +636,7 @@ export function VehicleModel() {
       })
       windowHitTargets.current = []
       lightHitTargets.current = []
+      partsHitTargets.current = []
       renderer.domElement.style.cursor = 'grab'
     }
   }, [renderer, scene, setModelStatus, setNotice])
@@ -554,10 +683,10 @@ export function VehicleModel() {
       }
 
       if (execution.action.type === 'hatch') {
-        const refs = hatchRefs.current
+        const refs = execution.action.target === 'front_hatch' ? hatchFrontRefs.current : hatchRefs.current
         if (!refs) {
-          requestOrbit(su7ConceptPack.actions.trunk.fallbackCamera)
-          setNotice('当前模型的真实尾门组合节点不完整，已用车尾镜头与轻微抬升降级展示。')
+          requestOrbit(execution.action.target === 'front_hatch' ? 'front' : su7ConceptPack.actions.trunk.fallbackCamera)
+          setNotice(execution.action.target === 'front_hatch' ? PARTS_VIRTUAL_HINT : '当前模型的真实尾门组合节点不完整，已用车尾镜头与轻微抬升降级展示。')
           const root = vehicleRoot.current
           if (root) {
             runtimeAnimations.current.set(execution.id, {
@@ -575,13 +704,32 @@ export function VehicleModel() {
         }
         const def = refs.definition
         const opening = execution.targetValue
+        if (refs.isVirtual) refs.pivot.visible = true
         runtimeAnimations.current.set(execution.id, {
           kind: 'hatch',
           execution,
           pivot: refs.pivot,
           definition: def,
-          fromRotation: refs.pivot.rotation.x,
+          fromRotation: refs.pivot.rotation[refs.rotationAxis],
           toRotation: opening ? def.openRotation : def.closedRotation,
+          rotationAxis: refs.rotationAxis,
+          isVirtual: refs.isVirtual,
+          startedAt,
+        })
+        continue
+      }
+
+      if (execution.action.type === 'door' && execution.action.target !== 'all') {
+        const refs = doorRefs.current?.[execution.action.target]
+        if (!refs) {
+          runtimeAnimations.current.set(execution.id, { kind: 'fallback', execution, startedAt })
+          setNotice(PARTS_VIRTUAL_HINT)
+          continue
+        }
+        runtimeAnimations.current.set(execution.id, {
+          kind: 'door', execution, pivot: refs.pivot,
+          fromRotation: refs.pivot.rotation.y,
+          toRotation: execution.targetValue ? refs.definition.openRotation : refs.definition.closedRotation,
           startedAt,
         })
         continue
@@ -601,6 +749,12 @@ export function VehicleModel() {
           to: vehicleClosedY.current + (execution.targetValue ? su7ConceptPack.actions.trunk.visualLift : 0),
           startedAt,
         })
+        continue
+      }
+
+
+      if (execution.action.type !== 'lights') {
+        runtimeAnimations.current.set(execution.id, { kind: 'fallback', execution, startedAt })
         continue
       }
 
@@ -657,7 +811,9 @@ export function VehicleModel() {
           animation.materials?.forEach((material) => { material.opacity = restoredOpacity })
           animation.object.visible = restoredOpacity > 0.001
         } else if (animation.kind === 'hatch') {
-          animation.pivot.rotation.x = animation.fromRotation
+          animation.pivot.rotation[animation.rotationAxis] = animation.fromRotation
+        } else if (animation.kind === 'door') {
+          animation.pivot.rotation.y = animation.fromRotation
         } else if (animation.kind === 'trunk') {
           animation.object.position.y = animation.from
         } else if (animation.kind === 'lights') {
@@ -697,7 +853,9 @@ export function VehicleModel() {
         animation.object.visible = opacity > 0.001
       } else if (animation.kind === 'hatch') {
         const rot = MathUtils.lerp(animation.fromRotation, animation.toRotation, eased)
-        animation.pivot.rotation.x = rot
+        animation.pivot.rotation[animation.rotationAxis] = rot
+      } else if (animation.kind === 'door') {
+        animation.pivot.rotation.y = MathUtils.lerp(animation.fromRotation, animation.toRotation, eased)
       } else if (animation.kind === 'trunk') {
         animation.object.position.y = MathUtils.lerp(animation.from, animation.to, eased)
       } else if (animation.kind === 'lights') {
@@ -716,6 +874,7 @@ export function VehicleModel() {
       }
 
       if (progress >= 1) {
+        if (animation.kind === 'hatch' && animation.isVirtual && !execution.targetValue) animation.pivot.visible = false
         finishAction(id, 'completed')
         runtimeAnimations.current.delete(id)
       }

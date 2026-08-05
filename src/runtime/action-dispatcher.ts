@@ -1,13 +1,17 @@
 import {
+  DOOR_LABELS,
+  DOOR_TARGETS,
   HatchActionDefinition,
   WINDOW_LABELS,
   WINDOW_TARGETS,
   su7ConceptPack,
   type WindowActionDefinition,
+  type DoorActionDefinition,
 } from '../pack/su7-concept.pack'
 import { useExperienceStore } from '../store/experience-store'
 import type {
   ActiveVehicleAction,
+  DoorTarget,
   HatchTarget,
   VehicleAction,
   WindowTarget,
@@ -27,6 +31,7 @@ let nextActionId = 1
  */
 function targetValueOf(action: Exclude<VehicleAction, { type: 'orbit' }>): boolean {
   if (action.type === 'window') return action.progress > 0
+  if (action.type === 'door') return action.progress > 0
   if (action.type === 'hatch') return action.open
   if (action.type === 'trunk') return action.open
   return action.on
@@ -43,8 +48,12 @@ function currentValueOf(action: Exclude<VehicleAction, { type: 'orbit' }>): bool
     const target = action.target as Exclude<WindowTarget, 'all'>
     return (state.windowProgress.get(target) ?? 0) > 0
   }
+  if (action.type === 'door') {
+    const target = action.target as Exclude<DoorTarget, 'all'>
+    return state.vehiclePartStates.get(`door_${target}`) === 'open'
+  }
   if (action.type === 'hatch') {
-    return state.vehiclePartStates.get('hatch_rear') === 'open'
+    return state.vehiclePartStates.get(action.target === 'front_hatch' ? 'hatch_front' : 'hatch_rear') === 'open'
   }
   if (action.type === 'trunk') {
     return state.vehiclePartStates.get('trunk') === 'open'
@@ -64,8 +73,15 @@ function conflictGroupOf(action: Exclude<VehicleAction, { type: 'orbit' }>): str
     ] as WindowActionDefinition | undefined
     return definition?.conflictGroup ?? 'windows'
   }
+  if (action.type === 'door') {
+    const target = action.target === 'all' ? DOOR_TARGETS[0] : action.target
+    return (su7ConceptPack.actions[`door_${target}`] as DoorActionDefinition).conflictGroup
+  }
   if (action.type === 'hatch') {
-    return (su7ConceptPack.actions.hatch_rear as HatchActionDefinition).conflictGroup
+    const definition = action.target === 'front_hatch'
+      ? su7ConceptPack.actions.hatch_front
+      : su7ConceptPack.actions.hatch_rear
+    return (definition as HatchActionDefinition).conflictGroup
   }
   if (action.type === 'trunk') return su7ConceptPack.actions.trunk.conflictGroup
   return action.target === 'headlight'
@@ -81,8 +97,12 @@ function durationOf(action: Exclude<VehicleAction, { type: 'orbit' }>): number {
     ] as WindowActionDefinition | undefined
     return definition?.durationMs ?? 800
   }
+  if (action.type === 'door') {
+    const target = action.target === 'all' ? DOOR_TARGETS[0] : action.target
+    return (su7ConceptPack.actions[`door_${target}`] as DoorActionDefinition).durationMs
+  }
   if (action.type === 'hatch') {
-    return (su7ConceptPack.actions.hatch_rear as HatchActionDefinition).durationMs
+    return (action.target === 'front_hatch' ? su7ConceptPack.actions.hatch_front : su7ConceptPack.actions.hatch_rear).durationMs
   }
   if (action.type === 'trunk') {
     // Prefer the real hatch duration when forwarding so the visible animation
@@ -103,8 +123,12 @@ function labelOf(action: Exclude<VehicleAction, { type: 'orbit' }>): string {
       : WINDOW_LABELS[action.target as Exclude<WindowTarget, 'all'>]
     return `${targetLabel} ${action.progress > 0 ? `开启至 ${action.progress}%` : '关闭至 0%'}`
   }
-  if (action.type === 'hatch') return `后备箱${action.open ? '打开' : '关闭'}`
-  if (action.type === 'trunk') return `后备箱${action.open ? '打开' : '关闭'}`
+  if (action.type === 'door') {
+    const targetLabel = action.target === 'all' ? '全部车门' : DOOR_LABELS[action.target]
+    return `${targetLabel}${action.open ? '打开' : '关闭'}`
+  }
+  if (action.type === 'hatch') return `${action.target === 'front_hatch' ? '前备箱' : '后备箱'}${action.open ? '打开' : '关闭'}`
+  if (action.type === 'trunk') return `${action.frunk ? '前备箱' : '后备箱'}${action.open ? '打开' : '关闭'}`
   return `${action.target === 'headlight' ? '大灯' : '尾灯'}${action.on ? '开启' : '关闭'}`
 }
 
@@ -132,6 +156,10 @@ function buildExecution(
   if (action.type === 'window' && action.target !== 'all') {
     execution.startProgress = currentProgressOf(action.target as Exclude<WindowTarget, 'all'>)
     execution.targetProgress = Math.max(0, Math.min(100, Math.round(action.progress)))
+  }
+  if (action.type === 'door' && action.target !== 'all') {
+    execution.startProgress = currentValueOf(action) ? 100 : 0
+    execution.targetProgress = action.open ? 100 : 0
   }
   return execution
 }
@@ -203,9 +231,20 @@ export function dispatchVehicleAction(action: VehicleAction): DispatchResult {
     return dispatchSingle(normalized)
   }
 
+  if (action.type === 'door' && action.target === 'all') {
+    for (const target of DOOR_TARGETS) {
+      dispatchSingle({ type: 'door', target, open: action.open, progress: action.open ? 100 : 0 })
+    }
+    return { ok: true, message: `已发送全部车门${action.open ? '打开' : '关闭'}指令` }
+  }
+
+  if (action.type === 'door') {
+    return dispatchSingle({ ...action, progress: action.open ? 100 : 0 })
+  }
+
   // Legacy trunk alias → normalized hatch action.
   if (action.type === 'trunk') {
-    const hatchTarget: HatchTarget = 'rear_hatch'
+    const hatchTarget: HatchTarget = action.frunk ? 'front_hatch' : 'rear_hatch'
     return dispatchSingle({
       type: 'hatch',
       target: hatchTarget,
