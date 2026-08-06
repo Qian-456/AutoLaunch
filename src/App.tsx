@@ -1,4 +1,4 @@
-import { Component, type ErrorInfo, type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
+import { Component, type CSSProperties, type ErrorInfo, type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { useProgress } from '@react-three/drei'
 import { ACESFilmicToneMapping, SRGBColorSpace } from 'three'
@@ -11,6 +11,7 @@ import { createBrowserSpeechRecognition, type BrowserSpeechRecognition } from '.
 import { useExperienceStore } from './store/experience-store'
 import { buildSiteTitle } from './runtime/site-title'
 import type { OrbitPreset, VehicleAction, WindowTarget } from './types'
+import { findProp, propCatalog, toggleSelectedProp, type PropId } from './props/prop-catalog'
 
 const orbitButtons: Array<{ preset: OrbitPreset; label: string }> = [
   { preset: 'hero_front_left', label: '主视觉' },
@@ -65,6 +66,10 @@ export function App() {
   const [command, setCommand] = useState('')
   const [isCommandDrawerOpen, setIsCommandDrawerOpen] = useState(false)
   const [isControlPanelOpen, setIsControlPanelOpen] = useState(false)
+  const [isPropWarehouseOpen, setIsPropWarehouseOpen] = useState(false)
+  const [selectedPropId, setSelectedPropId] = useState<PropId | null>(null)
+  const [showPropReferenceBox, setShowPropReferenceBox] = useState(false)
+  const [propLoadError, setPropLoadError] = useState<PropId | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [launchCountdown, setLaunchCountdown] = useState<number | null>(null)
   const [feedback, setFeedback] = useState('拖动车身区域可自由旋转 · 滚轮缩放 · 文字可输入：主驾车窗50%')
@@ -99,6 +104,18 @@ export function App() {
   const taillightOn = useExperienceStore((state) => state.lightStates.get('taillight'))
   const setVoiceState = useExperienceStore((state) => state.setVoiceState)
   const setStageMode = useExperienceStore((state) => state.setStageMode)
+  const selectedProp = findProp(selectedPropId)
+
+  const handlePropLoadError = useCallback((assetId: string) => {
+    if (assetId !== 'carry_on_20' && assetId !== 'checked_24') return
+    setPropLoadError(assetId)
+    setFeedback('道具加载失败，车辆展示与控制不受影响')
+  }, [])
+
+  const toggleProp = useCallback((id: PropId) => {
+    setPropLoadError(null)
+    setSelectedPropId((current) => toggleSelectedProp(current, id))
+  }, [])
 
   const runOrbit = useCallback((preset: OrbitPreset) => {
     if (useExperienceStore.getState().stageMode === 'launch') {
@@ -138,6 +155,7 @@ export function App() {
     }
     setIsControlPanelOpen(false)
     setIsCommandDrawerOpen(false)
+    setIsPropWarehouseOpen(false)
     setStageMode('studio')
     dispatchVehicleAction({ type: 'trunk', open: false })
     dispatchVehicleAction({ type: 'window', target: 'all', open: false, progress: 0 })
@@ -303,7 +321,11 @@ export function App() {
               precision: 'highp',
             }}
           >
-            <Experience />
+            <Experience
+              selectedProp={selectedProp}
+              showPropReferenceBox={showPropReferenceBox}
+              onPropLoadError={handlePropLoadError}
+            />
           </Canvas>
         </SceneErrorBoundary>
 
@@ -342,7 +364,10 @@ export function App() {
             className={`control-deck__launcher${isControlPanelOpen ? ' active' : ''}`}
             type="button"
             aria-expanded={isControlPanelOpen}
-            onClick={() => setIsControlPanelOpen((open) => !open)}
+            onClick={() => {
+              setIsControlPanelOpen((open) => !open)
+              setIsPropWarehouseOpen(false)
+            }}
           >
             {isControlPanelOpen ? '收起控制' : '车辆控制'}
           </button>
@@ -465,6 +490,78 @@ export function App() {
                   </button>
                 )
               })}
+            </div>
+          </section>
+
+          <button
+            className={`prop-warehouse__launcher${isPropWarehouseOpen ? ' active' : ''}`}
+            type="button"
+            aria-expanded={isPropWarehouseOpen}
+            aria-controls="prop-warehouse-panel"
+            onClick={() => {
+              setIsPropWarehouseOpen((open) => !open)
+              setIsControlPanelOpen(false)
+            }}
+          >
+            道具仓库
+            {selectedProp && <span aria-label={`当前展示：${selectedProp.name}`} />}
+          </button>
+
+          <section
+            className={`prop-warehouse${isPropWarehouseOpen ? ' prop-warehouse--open' : ''}`}
+            id="prop-warehouse-panel"
+            aria-label="道具仓库"
+            aria-hidden={!isPropWarehouseOpen}
+          >
+            <div className="prop-warehouse__heading">
+              <div>
+                <span>PROP LIBRARY</span>
+                <h2>行李道具</h2>
+              </div>
+              {selectedProp && <button type="button" onClick={() => setSelectedPropId(null)}>全部收回</button>}
+            </div>
+            <p>选择后展示在车辆前侧独立基座，不参与车辆动作或碰撞。</p>
+            <button
+              className={`prop-warehouse__comparison${showPropReferenceBox ? ' active' : ''}`}
+              type="button"
+              aria-pressed={showPropReferenceBox}
+              disabled={!selectedProp}
+              onClick={() => setShowPropReferenceBox((visible) => !visible)}
+            >
+              <span>尺寸对照</span>
+              <small>{showPropReferenceBox ? 'ON · 可左右拖动重叠' : 'OFF · 显示等尺寸参照盒'}</small>
+            </button>
+            <div className="prop-warehouse__grid">
+              {propCatalog.map((entry) => {
+                const active = selectedPropId === entry.id
+                const failed = propLoadError === entry.id
+                const [height, width, depth] = entry.dimensionsM.map((value) => {
+                  const centimetres = value * 100
+                  return Number.isInteger(centimetres) ? String(centimetres) : centimetres.toFixed(1)
+                })
+                return (
+                  <article className={`prop-card${active ? ' active' : ''}${failed ? ' failed' : ''}`} key={entry.id}>
+                    <div className="prop-card__swatch" style={{ '--prop-color': entry.previewColor } as CSSProperties}>
+                      <span aria-hidden="true" />
+                    </div>
+                    <div className="prop-card__copy">
+                      <strong>{entry.name}</strong>
+                      <span>{entry.description}</span>
+                      <small>{height} × {width} × {depth} cm</small>
+                    </div>
+                    <button type="button" onClick={() => toggleProp(entry.id)}>
+                      {active ? '收回' : failed ? '重试' : '展示'}
+                    </button>
+                  </article>
+                )
+              })}
+            </div>
+            <div className="prop-warehouse__attribution">
+              <span>当前资产</span>
+              <strong>{selectedProp?.attribution.author ?? 'AutoLaunch Contributors'}</strong>
+              <a href={selectedProp?.attribution.licenseUrl ?? 'https://creativecommons.org/licenses/by-nc-sa/4.0/'} target="_blank" rel="noreferrer">
+                {selectedProp?.attribution.license ?? 'CC BY-NC-SA 4.0'} · 原创无品牌道具 · 禁止商用
+              </a>
             </div>
           </section>
 

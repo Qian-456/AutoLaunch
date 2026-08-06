@@ -1,8 +1,35 @@
-import { Suspense } from 'react'
+import { Component, Suspense, type ErrorInfo, type ReactNode } from 'react'
 import { ContactShadows } from '@react-three/drei'
 import { VehicleModel } from './VehicleModel'
 import { OrbitCameraRig } from './OrbitCameraRig'
 import { useExperienceStore } from '../store/experience-store'
+import { PropDisplay } from './PropDisplay'
+import type { PropCatalogEntry } from '../props/prop-catalog'
+
+class PropDisplayBoundary extends Component<{
+  children: ReactNode
+  assetId: string
+  onError: (assetId: string) => void
+}, { failed: boolean }> {
+  state = { failed: false }
+
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('[AutoLaunch] prop failed to load:', error, info)
+    this.props.onError(this.props.assetId)
+  }
+
+  componentDidUpdate(previous: Readonly<{ assetId: string }>) {
+    if (previous.assetId !== this.props.assetId && this.state.failed) this.setState({ failed: false })
+  }
+
+  render() {
+    return this.state.failed ? null : this.props.children
+  }
+}
 
 function LaunchStage() {
   return (
@@ -24,7 +51,15 @@ function LaunchStage() {
   )
 }
 
-export function Experience() {
+export function Experience({
+  selectedProp,
+  showPropReferenceBox,
+  onPropLoadError,
+}: {
+  selectedProp: PropCatalogEntry | null
+  showPropReferenceBox: boolean
+  onPropLoadError: (assetId: string) => void
+}) {
   const stageMode = useExperienceStore((state) => state.stageMode)
 
   return (
@@ -44,6 +79,13 @@ export function Experience() {
       <Suspense fallback={null}>
         <VehicleModel />
       </Suspense>
+      {stageMode === 'studio' && selectedProp && (
+        <PropDisplayBoundary assetId={selectedProp.id} onError={onPropLoadError}>
+          <Suspense fallback={null}>
+            <PropDisplay entry={selectedProp} showPropReferenceBox={showPropReferenceBox} />
+          </Suspense>
+        </PropDisplayBoundary>
+      )}
       <ContactShadows position={[0, -0.015, 0]} opacity={0.72} scale={12} blur={2.6} far={5} frames={3} />
       {stageMode === 'launch' ? <LaunchStage /> : (
         <mesh rotation-x={-Math.PI / 2} position-y={-0.03} receiveShadow>

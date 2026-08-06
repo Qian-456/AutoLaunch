@@ -1,51 +1,66 @@
-# ============================================================
-# AutoLaunch · AI 数字发布会开源框架 · .gitignore
-# Node.js / Vite / React 标准忽略 + GLB 模型忽略 + 系统文件
-# ============================================================
+# AutoLaunch public repository ignore rules
 
-# ---------- 依赖 ----------
+# Dependencies and local tool environments
 node_modules/
 .venv/
-__pycache__/
-*.py[cod]
 .pnp/
 .pnp.js
 .yarn/install-state.gz
+__pycache__/
+*.py[cod]
 
-# ---------- 编译输出 ----------
+# Build and test output
 dist/
 dist-ssr/
 build/
 out/
-*.local
+coverage/
+*.lcov
+.nyc_output/
+playwright-report/
+test-results/
+*.tsbuildinfo
+.vite/
 
-# ---------- 编辑器/IDE ----------
+# Secrets and local environment
+.env
+.env.local
+.env.*.local
+*.local
+# Keep the public configuration template.
+!.env.example
+
+# Logs and editor files
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 .vscode/*
 !.vscode/extensions.json
 !.vscode/README.md
 .idea/
-.DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
 
-# ---------- 日志与调试 ----------
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-*.log
-*.tsbuildinfo
+# Private development playbooks and agent tooling
+AGENTS.md
+.trae/
+.agents/
+.codex/
+skills/
+scripts/
 
-# ---------- 环境变量（密钥绝不入库） ----------
-.env
-.env.local
-.env.*.local
-
-# Local-only voice/video production secrets, tools, and generated media
+# Internal plans, design references, production media, and visual QA
+docs/
+screenshots/
+visual-tests/
+videos/
+recordings/
 .tts-cache/
 *.wav
 *.mp3
@@ -57,72 +72,33 @@ lerna-debug.log*
 *.srt
 *.ass
 *.vtt
-videos/edit-work/dashscope-voice/
-videos/edit-work/voice_*.wav
-videos/edit-work/*.mp3
-videos/edit-work/*contact*.jpg
-videos/edit-work/v1-last-frame.jpg
-# .env.example 必须保留
+*.mkv
+*.mp4
+*.mov
 
-# ---------- 本地开发辅助脚本（不对外发布，可写入 TRAE Skill 但不入库） ----------
-scripts/
-
-# ---------- 测试与覆盖率 ----------
-coverage/
-*.lcov
-.nyc_output/
-playwright-report/
-test-results/
-.nyc_output/
-
-# ---------- 3D 模型与大型媒体 ----------
-# 根目录原始未压缩 GLB（Sketchfab 源文件，通常 30MB+）仅留本地备份，不入库。
-# 运行时实际使用的是 public/assets/ 下经 KTX2 + Meshopt 压缩的优化版（约 13MB）。
-# 如需重新压缩 / 重新导出，本地根目录这份即为原始 master copy。
+# Local 3D source/master files and generated inspection data
 *.glb
 *.gltf
 *.fbx
 *.obj
 *.stl
+*.bin
+*.hdr
+glb-nodes.json
+2025-xiaomi-su7-ultra/
+.tmp/
+
+# Runtime 3D assets intentionally published with the application
 !public/assets/*.glb
 !public/assets/*.gltf
 
-# public/assets 中其他二进制（非模型）仍不入库，避免 HDR 原图或 FBX 源文件过大
-public/assets/*.fbx
-public/assets/*.hdr
-public/assets/*.bin
-
-# 3D 模型优化临时目录（gltf-transform / ktx2 / meshopt 中间产物）
-.tmp/
-
-# 本地 GLB 节点结构分析导出快照（仅本地扩展 Product Pack nodeMap 时查阅用）
-# 其他开发者需要时可自行用 GLTFLoader 重新导出，不入库
-glb-nodes.json
-
-# ---------- 录制与媒体输出 ----------
-recordings/
-*.mkv
-*.mp4
-*.mov
+# Archives and operating-system files
 *.zip
 *.tar.gz
-
-# ---------- 系统 ----------
+*.tmp
+*.temp
+.DS_Store
 Thumbs.db
 ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
-*.tmp
-*.temp
-
-# ---------- 产品 Pack 临时工作目录 ----------
-2025-xiaomi-su7-ultra/
-
-# ---------- TRAE IDE 本地配置与子智能体 / Skill 配置（不对外发布，本地使用） ----------
-.trae/
-
-# ---------- 文档与 Spec（不对外发布，仅本地 / 黑客松前内部使用） ----------
-docs/
-
-# ---------- 视频脚本与制作素材（不对外发布） ----------
-videos/
