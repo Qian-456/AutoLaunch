@@ -60,6 +60,7 @@ function dispatchCargoAction(action: CargoAction): DispatchResult {
     })
     if (placements.some((placement) => !placement)) return { ok: false, message: '组合装载布局不完整' }
     state.setCargoPlacements(placements as CargoPlacement[])
+    state.setCargoArmedProp(null)
     state.setCargoReflowProposal(null)
     dispatchVehicleAction({ type: 'trunk', open: true })
     state.requestOrbit('cargo_rear')
@@ -81,6 +82,7 @@ function dispatchCargoAction(action: CargoAction): DispatchResult {
       })
     }
     state.setCargoReflowProposal(null)
+    state.setCargoArmedProp(null)
     return { ok: true, message: '正在收回全部行李道具' }
   }
 
@@ -99,6 +101,7 @@ function dispatchCargoAction(action: CargoAction): DispatchResult {
       occupiedBounds: boundsForProp(entry, entry.stagePosition, entry.stageRotation[1]),
       anchorId: null,
     })
+    state.setCargoArmedProp(null)
     return { ok: true, message: `正在取出${entry.name}` }
   }
 
@@ -118,9 +121,9 @@ function dispatchCargoAction(action: CargoAction): DispatchResult {
     return { ok: false, message: cargoReasonLabels[result.reason] }
   }
   state.setCargoPlacement(loadingPlacement(action.propId, result.candidate, current?.position))
+  state.setCargoArmedProp(null)
   state.setCargoReflowProposal(null)
   dispatchVehicleAction({ type: 'trunk', open: true })
-  state.requestOrbit('cargo_rear')
   return { ok: true, message: `已找到合法位置，正在辅助装入${findProp(action.propId)?.name ?? '行李箱'}` }
 }
 

@@ -466,6 +466,17 @@ button:focus-visible { outline: 2px solid rgba(37,230,194,.72); outline-offset: 
 }
 .cargo-capacity-status strong { color: #cffff6; font-size: 10px; font-weight: 520; }
 .cargo-capacity-status span { color: #6e928b; font-size: 8px; }
+.cargo-target-label {
+  display: block;
+  padding: 5px 8px;
+  color: #dffff9;
+  border: 1px solid rgba(37,230,194,.35);
+  border-radius: 999px;
+  background: rgba(5,12,14,.82);
+  box-shadow: 0 5px 18px rgba(0,0,0,.28);
+  font-size: 9px;
+  white-space: nowrap;
+}
 .prop-warehouse__attribution {
   display: grid;
   grid-template-columns: auto 1fr;

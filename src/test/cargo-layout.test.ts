@@ -27,7 +27,7 @@ function loaded(propId: 'carry_on_20' | 'checked_24', layout: 'two_suitcases'): 
 
 describe('continuous cargo layout', () => {
   beforeEach(() => {
-    useExperienceStore.setState({ cargoPlacements: new Map(), cargoReflowProposal: null })
+    useExperienceStore.setState({ cargoPlacements: new Map(), cargoArmedPropId: null, cargoReflowProposal: null })
   })
 
   it('derives collision height from the real metre dimensions', () => {
@@ -95,6 +95,20 @@ describe('continuous cargo layout', () => {
     expect([...placements.keys()]).toEqual(['checked_24', 'carry_on_20'])
     expect([...placements.values()].every((placement) => placement.state === 'loading')).toBe(true)
     expect(useExperienceStore.getState().activeOrbitPreset).toBe('cargo_rear')
+  })
+
+  it('supports an armed prop and clears selection after a left/right placement action', () => {
+    useExperienceStore.getState().setCargoArmedProp('carry_on_20')
+    expect(useExperienceStore.getState().cargoArmedPropId).toBe('carry_on_20')
+    const result = dispatchVehicleAction({
+      type: 'cargo',
+      operation: 'place',
+      propId: 'carry_on_20',
+      preferredAnchor: 'rear_right',
+    })
+    expect(result.ok).toBe(true)
+    expect(useExperienceStore.getState().cargoArmedPropId).toBeNull()
+    expect(useExperienceStore.getState().cargoPlacements.get('carry_on_20')?.anchorId).toBe('rear_right')
   })
 
   it('prevents the rear hatch from closing during a cargo transition', () => {

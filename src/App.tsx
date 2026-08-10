@@ -118,7 +118,14 @@ export function App() {
 
   const toggleProp = useCallback((id: PropId) => {
     setPropLoadError(null)
-    setSelectedPropId((current) => toggleSelectedProp(current, id))
+    setSelectedPropId((current) => {
+      const next = toggleSelectedProp(current, id)
+      if (next) {
+        dispatchVehicleAction({ type: 'trunk', open: true })
+        setFeedback('行李箱已放在车尾装载垫上；点击箱体选中，再点击后备箱左侧或右侧')
+      }
+      return next
+    })
   }, [])
 
   const runOrbit = useCallback((preset: OrbitPreset) => {
@@ -534,7 +541,7 @@ export function App() {
                 setSelectedPropId(null)
               }}>全部收回</button>}
             </div>
-            <p>选择道具后可直接拖向后备箱；接近有效位置时才会出现青绿色辅助轮廓。</p>
+            <p>选择道具后点击车尾箱体使其虚化，再点击后备箱内的左侧或右侧落位区。</p>
             <button
               className={`prop-warehouse__comparison${showPropReferenceBox ? ' active' : ''}`}
               type="button"

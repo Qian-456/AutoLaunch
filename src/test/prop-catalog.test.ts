@@ -15,7 +15,8 @@ describe('prop catalog', () => {
     expect(new Set(propCatalog.map((entry) => entry.modelPath)).size).toBe(propCatalog.length)
     expect(propCatalog.every((entry) => entry.attribution.license === 'CC BY-NC-SA 4.0')).toBe(true)
     expect(propCatalog.every((entry) => entry.attribution.licenseUrl === 'https://creativecommons.org/licenses/by-nc-sa/4.0/')).toBe(true)
-    expect(findProp('checked_24')?.stageRotation[1]).toBeCloseTo(-0.56)
+    expect(findProp('checked_24')?.stageRotation[1]).toBeCloseTo(Math.PI / 2)
+    expect(findProp('checked_24')?.stagePosition).toEqual([2.84, 0.03, -0.85])
   })
 
   it('switches, toggles off, and never returns more than one selected prop', () => {

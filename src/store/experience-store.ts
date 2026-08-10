@@ -35,6 +35,7 @@ type ExperienceState = {
   lightStates: Map<LightPartId, boolean>
   activeActions: Map<string, ActiveVehicleAction>
   cargoPlacements: Map<PropId, CargoPlacement>
+  cargoArmedPropId: PropId | null
   cargoReflowProposal: { propId: PropId; layoutId: CargoLayoutId } | null
   lastActionOutcome: ActionOutcome
   setStageMode: (mode: ExperienceState['stageMode']) => void
@@ -48,6 +49,7 @@ type ExperienceState = {
   setCargoPlacement: (placement: CargoPlacement) => void
   setCargoPlacements: (placements: readonly CargoPlacement[]) => void
   removeCargoPlacement: (propId: PropId) => void
+  setCargoArmedProp: (propId: PropId | null) => void
   setCargoReflowProposal: (proposal: ExperienceState['cargoReflowProposal']) => void
 }
 
@@ -111,6 +113,7 @@ export const useExperienceStore = create<ExperienceState>((set) => ({
   lightStates: initialLightStates(),
   activeActions: new Map(),
   cargoPlacements: new Map(),
+  cargoArmedPropId: null,
   cargoReflowProposal: null,
   lastActionOutcome: null,
   setStageMode: (stageMode) => set({ stageMode }),
@@ -146,6 +149,7 @@ export const useExperienceStore = create<ExperienceState>((set) => ({
       cargoPlacements.delete(propId)
       return { cargoPlacements }
     }),
+  setCargoArmedProp: (cargoArmedPropId) => set({ cargoArmedPropId }),
   setCargoReflowProposal: (cargoReflowProposal) => set({ cargoReflowProposal }),
   startAction: (execution) =>
     set((state) => {
