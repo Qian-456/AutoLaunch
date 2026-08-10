@@ -11,6 +11,12 @@ export type PropCatalogEntry = {
   readonly previewColor: string
   readonly stagePosition: readonly [number, number, number]
   readonly stageRotation: readonly [number, number, number]
+  readonly collisionBoxes: readonly {
+    readonly size: readonly [number, number, number]
+    readonly offset: readonly [number, number, number]
+  }[]
+  readonly allowedOrientations: readonly number[]
+  readonly stackable: boolean
   readonly attribution: {
     readonly author: string
     readonly source: string
@@ -37,6 +43,9 @@ export const propCatalog = [
     previewColor: '#202428',
     stagePosition: [-3.25, 0.08, 1.62],
     stageRotation: [0, -0.56, 0],
+    collisionBoxes: [{ size: [0.37, 0.56, 0.23], offset: [0, 0.28, 0] }],
+    allowedOrientations: [0, Math.PI / 2],
+    stackable: false,
     attribution: autolaunchAttribution,
   },
   {
@@ -49,6 +58,9 @@ export const propCatalog = [
     previewColor: '#b7bdc1',
     stagePosition: [-3.25, 0.08, 1.62],
     stageRotation: [0, -0.56, 0],
+    collisionBoxes: [{ size: [0.433, 0.665, 0.275], offset: [0, 0.3325, 0] }],
+    allowedOrientations: [0, Math.PI / 2],
+    stackable: false,
     attribution: autolaunchAttribution,
   },
 ] as const satisfies readonly PropCatalogEntry[]
@@ -70,6 +82,8 @@ export function validatePropCatalog(entries: readonly PropCatalogEntry[]): strin
     if (paths.has(entry.modelPath)) errors.push(`duplicate modelPath: ${entry.modelPath}`)
     if (!/^\/assets\/[a-z0-9-]+\.glb$/.test(entry.modelPath)) errors.push(`invalid modelPath: ${entry.modelPath}`)
     if (entry.dimensionsM.some((value) => !Number.isFinite(value) || value <= 0)) errors.push(`invalid dimensions: ${entry.id}`)
+    if (!entry.collisionBoxes.length || entry.collisionBoxes.some((box) => box.size.some((value) => !Number.isFinite(value) || value <= 0))) errors.push(`invalid collision boxes: ${entry.id}`)
+    if (!entry.allowedOrientations.length) errors.push(`missing orientations: ${entry.id}`)
     if (!entry.attribution.author || !entry.attribution.source || !entry.attribution.license) errors.push(`missing attribution: ${entry.id}`)
     ids.add(entry.id)
     paths.add(entry.modelPath)

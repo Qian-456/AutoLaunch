@@ -18,6 +18,8 @@ const orbitButtons: Array<{ preset: OrbitPreset; label: string }> = [
   { preset: 'front', label: '前脸' },
   { preset: 'driver_side', label: '主驾侧' },
   { preset: 'rear_three_quarter', label: '车尾' },
+  { preset: 'cargo_rear', label: '装载' },
+  { preset: 'cargo_overview', label: '容量俯视' },
   { preset: 'turntable', label: '自动运镜' },
 ]
 
@@ -102,6 +104,8 @@ export function App() {
   })
   const headlightOn = useExperienceStore((state) => state.lightStates.get('headlight'))
   const taillightOn = useExperienceStore((state) => state.lightStates.get('taillight'))
+  const cargoPlacements = useExperienceStore((state) => state.cargoPlacements)
+  const cargoReflowProposal = useExperienceStore((state) => state.cargoReflowProposal)
   const setVoiceState = useExperienceStore((state) => state.setVoiceState)
   const setStageMode = useExperienceStore((state) => state.setStageMode)
   const selectedProp = findProp(selectedPropId)
@@ -129,6 +133,12 @@ export function App() {
     if (useExperienceStore.getState().stageMode === 'launch') {
       useExperienceStore.getState().setStageMode('studio')
     }
+    const result = dispatchVehicleAction(action)
+    setFeedback(result.message)
+  }, [])
+
+  const runCargoAction = useCallback((action: Extract<VehicleAction, { type: 'cargo' }>) => {
+    if (useExperienceStore.getState().stageMode === 'launch') useExperienceStore.getState().setStageMode('studio')
     const result = dispatchVehicleAction(action)
     setFeedback(result.message)
   }, [])
@@ -325,6 +335,7 @@ export function App() {
               selectedProp={selectedProp}
               showPropReferenceBox={showPropReferenceBox}
               onPropLoadError={handlePropLoadError}
+              onCargoFeedback={setFeedback}
             />
           </Canvas>
         </SceneErrorBoundary>
@@ -518,9 +529,12 @@ export function App() {
                 <span>PROP LIBRARY</span>
                 <h2>行李道具</h2>
               </div>
-              {selectedProp && <button type="button" onClick={() => setSelectedPropId(null)}>全部收回</button>}
+              {(selectedProp || cargoPlacements.size > 0) && <button type="button" onClick={() => {
+                runCargoAction({ type: 'cargo', operation: 'clear' })
+                setSelectedPropId(null)
+              }}>全部收回</button>}
             </div>
-            <p>选择后展示在车辆前侧独立基座，不参与车辆动作或碰撞。</p>
+            <p>选择道具后可直接拖向后备箱；接近有效位置时才会出现青绿色辅助轮廓。</p>
             <button
               className={`prop-warehouse__comparison${showPropReferenceBox ? ' active' : ''}`}
               type="button"
@@ -529,12 +543,27 @@ export function App() {
               onClick={() => setShowPropReferenceBox((visible) => !visible)}
             >
               <span>尺寸对照</span>
-              <small>{showPropReferenceBox ? 'ON · 可左右拖动重叠' : 'OFF · 显示等尺寸参照盒'}</small>
+              <small>{showPropReferenceBox ? 'ON · 显示真实米制外廓' : 'OFF · 显示等尺寸参照盒'}</small>
             </button>
+            <button
+              className="prop-warehouse__demo"
+              type="button"
+              onClick={() => runCargoAction({ type: 'cargo', operation: 'demonstrate', combinationId: 'two_suitcases' })}
+            >
+              演示 20 寸 + 24 寸组合装载
+            </button>
+            {cargoReflowProposal && (
+              <div className="cargo-reflow" role="status">
+                <span>当前摆法需要重新整理已有行李箱，系统不会自动挤开物品。</span>
+                <button type="button" onClick={() => runCargoAction({ type: 'cargo', operation: 'demonstrate', combinationId: cargoReflowProposal.layoutId })}>确认整理并放入</button>
+                <button type="button" onClick={() => useExperienceStore.getState().setCargoReflowProposal(null)}>取消</button>
+              </div>
+            )}
             <div className="prop-warehouse__grid">
               {propCatalog.map((entry) => {
                 const active = selectedPropId === entry.id
                 const failed = propLoadError === entry.id
+                const cargoPlacement = cargoPlacements.get(entry.id)
                 const [height, width, depth] = entry.dimensionsM.map((value) => {
                   const centimetres = value * 100
                   return Number.isInteger(centimetres) ? String(centimetres) : centimetres.toFixed(1)
@@ -549,13 +578,27 @@ export function App() {
                       <span>{entry.description}</span>
                       <small>{height} × {width} × {depth} cm</small>
                     </div>
-                    <button type="button" onClick={() => toggleProp(entry.id)}>
-                      {active ? '收回' : failed ? '重试' : '展示'}
-                    </button>
+                    <div className="prop-card__actions">
+                      <button type="button" onClick={() => toggleProp(entry.id)}>
+                        {active ? '取消选择' : failed ? '重试' : '选择'}
+                      </button>
+                      <button type="button" onClick={() => runCargoAction(cargoPlacement
+                        ? { type: 'cargo', operation: 'remove', propId: entry.id }
+                        : { type: 'cargo', operation: 'place', propId: entry.id }
+                      )}>
+                        {cargoPlacement ? '取出' : '装入'}
+                      </button>
+                    </div>
                   </article>
                 )
               })}
             </div>
+            {cargoPlacements.size > 0 && (
+              <div className="cargo-capacity-status">
+                <strong>{cargoPlacements.size >= 2 ? '20 寸 + 24 寸可同时放入' : '已占用实际物品外廓，剩余空间仍可继续判断'}</strong>
+                <span>示意布局，非官方测量结果</span>
+              </div>
+            )}
             <div className="prop-warehouse__attribution">
               <span>当前资产</span>
               <strong>{selectedProp?.attribution.author ?? 'AutoLaunch Contributors'}</strong>

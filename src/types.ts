@@ -1,4 +1,6 @@
-export type OrbitPreset = 'hero_front_left' | 'front' | 'driver_side' | 'rear_three_quarter' | 'turntable'
+import type { PropId } from './props/prop-catalog'
+
+export type OrbitPreset = 'hero_front_left' | 'front' | 'driver_side' | 'rear_three_quarter' | 'cargo_rear' | 'cargo_overview' | 'turntable'
 
 export type OrbitAction = {
   type: 'orbit'
@@ -53,7 +55,35 @@ export type LightsAction = {
   on: boolean
 }
 
-export type VehicleAction = OrbitAction | WindowAction | DoorAction | HatchAction | TrunkAction | LightsAction
+export type CargoAnchorId = 'rear_left' | 'rear_right' | 'front_center'
+export type CargoLayoutId = 'two_suitcases'
+
+export type CargoAction =
+  | { type: 'cargo'; operation: 'place'; propId: PropId; preferredAnchor?: CargoAnchorId }
+  | { type: 'cargo'; operation: 'remove'; propId: PropId }
+  | { type: 'cargo'; operation: 'clear' }
+  | { type: 'cargo'; operation: 'demonstrate'; combinationId: CargoLayoutId }
+
+export type CargoBounds = {
+  center: readonly [number, number, number]
+  halfSize: readonly [number, number, number]
+  rotationY: number
+}
+
+export type CargoPlacementState = 'staged' | 'dragging' | 'loading' | 'loaded' | 'returning'
+
+export type CargoPlacement = {
+  propId: PropId
+  state: CargoPlacementState
+  position: readonly [number, number, number]
+  rotation: readonly [number, number, number]
+  occupiedBounds: CargoBounds
+  anchorId: CargoAnchorId | null
+  /** Transient animation origin; omitted after loading/returning completes. */
+  transitionFrom?: readonly [number, number, number]
+}
+
+export type VehicleAction = OrbitAction | WindowAction | DoorAction | HatchAction | TrunkAction | LightsAction | CargoAction
 
 export type LaunchChapter = {
   id: string
@@ -63,7 +93,7 @@ export type LaunchChapter = {
   camera: OrbitPreset
   actions: readonly {
     atMs: number
-    action: Exclude<VehicleAction, OrbitAction>
+    action: Exclude<VehicleAction, OrbitAction | CargoAction>
   }[]
 }
 
@@ -88,7 +118,7 @@ export type ActionTerminalStatus = 'completed' | 'cancelled' | 'failed'
 
 export type ActiveVehicleAction = {
   id: string
-  action: Exclude<VehicleAction, OrbitAction>
+  action: Exclude<VehicleAction, OrbitAction | CargoAction>
   conflictGroup: string
   durationMs: number
   startedAt: number

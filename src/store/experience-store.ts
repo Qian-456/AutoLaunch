@@ -2,6 +2,8 @@ import { create } from 'zustand'
 import type {
   ActionTerminalStatus,
   ActiveVehicleAction,
+  CargoLayoutId,
+  CargoPlacement,
   LightPartId,
   OrbitPreset,
   VehiclePartId,
@@ -9,6 +11,7 @@ import type {
   VoiceState,
   WindowTarget,
 } from '../types'
+import type { PropId } from '../props/prop-catalog'
 import { WINDOW_TARGETS } from '../pack/su7-concept.pack'
 
 type ActionOutcome = { id: string; status: ActionTerminalStatus } | null
@@ -31,6 +34,8 @@ type ExperienceState = {
   windowProgress: Map<Exclude<WindowTarget, 'all'>, number>
   lightStates: Map<LightPartId, boolean>
   activeActions: Map<string, ActiveVehicleAction>
+  cargoPlacements: Map<PropId, CargoPlacement>
+  cargoReflowProposal: { propId: PropId; layoutId: CargoLayoutId } | null
   lastActionOutcome: ActionOutcome
   setStageMode: (mode: ExperienceState['stageMode']) => void
   requestOrbit: (preset: OrbitPreset) => void
@@ -40,6 +45,10 @@ type ExperienceState = {
   setVoiceState: (voice: VoiceState) => void
   startAction: (execution: ActiveVehicleAction) => void
   finishAction: (id: string, status: ActionTerminalStatus) => void
+  setCargoPlacement: (placement: CargoPlacement) => void
+  setCargoPlacements: (placements: readonly CargoPlacement[]) => void
+  removeCargoPlacement: (propId: PropId) => void
+  setCargoReflowProposal: (proposal: ExperienceState['cargoReflowProposal']) => void
 }
 
 const initialPartStates = () =>
@@ -101,6 +110,8 @@ export const useExperienceStore = create<ExperienceState>((set) => ({
   windowProgress: initialWindowProgress(),
   lightStates: initialLightStates(),
   activeActions: new Map(),
+  cargoPlacements: new Map(),
+  cargoReflowProposal: null,
   lastActionOutcome: null,
   setStageMode: (stageMode) => set({ stageMode }),
   requestOrbit: (preset) =>
@@ -121,6 +132,21 @@ export const useExperienceStore = create<ExperienceState>((set) => ({
   setNotice: (notice) => set({ notice }),
   setVoiceState: (voice) =>
     set((state) => ({ inputMode: { ...state.inputMode, voice } })),
+  setCargoPlacement: (placement) =>
+    set((state) => {
+      const cargoPlacements = new Map(state.cargoPlacements)
+      cargoPlacements.set(placement.propId, placement)
+      return { cargoPlacements }
+    }),
+  setCargoPlacements: (placements) =>
+    set({ cargoPlacements: new Map(placements.map((placement) => [placement.propId, placement])) }),
+  removeCargoPlacement: (propId) =>
+    set((state) => {
+      const cargoPlacements = new Map(state.cargoPlacements)
+      cargoPlacements.delete(propId)
+      return { cargoPlacements }
+    }),
+  setCargoReflowProposal: (cargoReflowProposal) => set({ cargoReflowProposal }),
   startAction: (execution) =>
     set((state) => {
       const activeActions = new Map(state.activeActions)

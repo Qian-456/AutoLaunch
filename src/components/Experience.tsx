@@ -1,10 +1,11 @@
 import { Component, Suspense, type ErrorInfo, type ReactNode } from 'react'
-import { ContactShadows } from '@react-three/drei'
+import { ContactShadows, Edges } from '@react-three/drei'
 import { VehicleModel } from './VehicleModel'
 import { OrbitCameraRig } from './OrbitCameraRig'
 import { useExperienceStore } from '../store/experience-store'
 import { PropDisplay } from './PropDisplay'
-import type { PropCatalogEntry } from '../props/prop-catalog'
+import { propCatalog, type PropCatalogEntry } from '../props/prop-catalog'
+import { su7ConceptPack } from '../pack/su7-concept.pack'
 
 class PropDisplayBoundary extends Component<{
   children: ReactNode
@@ -55,12 +56,16 @@ export function Experience({
   selectedProp,
   showPropReferenceBox,
   onPropLoadError,
+  onCargoFeedback,
 }: {
   selectedProp: PropCatalogEntry | null
   showPropReferenceBox: boolean
   onPropLoadError: (assetId: string) => void
+  onCargoFeedback: (message: string) => void
 }) {
   const stageMode = useExperienceStore((state) => state.stageMode)
+  const cargoPlacements = useExperienceStore((state) => state.cargoPlacements)
+  const showCargoVolume = [...cargoPlacements.values()].some((placement) => placement.state !== 'returning')
 
   return (
     <>
@@ -79,12 +84,26 @@ export function Experience({
       <Suspense fallback={null}>
         <VehicleModel />
       </Suspense>
-      {stageMode === 'studio' && selectedProp && (
-        <PropDisplayBoundary assetId={selectedProp.id} onError={onPropLoadError}>
-          <Suspense fallback={null}>
-            <PropDisplay entry={selectedProp} showPropReferenceBox={showPropReferenceBox} />
-          </Suspense>
-        </PropDisplayBoundary>
+      {stageMode === 'studio' && propCatalog
+        .filter((entry) => entry.id === selectedProp?.id || cargoPlacements.has(entry.id))
+        .map((entry) => (
+          <PropDisplayBoundary key={entry.id} assetId={entry.id} onError={onPropLoadError}>
+            <Suspense fallback={null}>
+              <PropDisplay
+                entry={entry}
+                selected={entry.id === selectedProp?.id}
+                showPropReferenceBox={showPropReferenceBox}
+                onFeedback={onCargoFeedback}
+              />
+            </Suspense>
+          </PropDisplayBoundary>
+        ))}
+      {stageMode === 'studio' && showCargoVolume && (
+        <mesh position={[1.44, su7ConceptPack.cargoVolume.floorY + 0.005, 0]}>
+          <boxGeometry args={[1.0, 0.01, 1.18]} />
+          <meshStandardMaterial color="#24e6c1" transparent opacity={0.07} depthWrite={false} />
+          <Edges color="#397e73" />
+        </mesh>
       )}
       <ContactShadows position={[0, -0.015, 0]} opacity={0.72} scale={12} blur={2.6} far={5} frames={3} />
       {stageMode === 'launch' ? <LaunchStage /> : (

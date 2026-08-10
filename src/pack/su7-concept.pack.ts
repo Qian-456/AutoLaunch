@@ -1,4 +1,5 @@
-import type { DoorTarget, LaunchChapter, OrbitActionDefinition, OrbitPreset, WindowTarget } from '../types'
+import type { CargoAnchorId, CargoLayoutId, DoorTarget, LaunchChapter, OrbitActionDefinition, OrbitPreset, WindowTarget } from '../types'
+import type { PropId } from '../props/prop-catalog'
 
 type ConcreteDoorTarget = Exclude<DoorTarget, 'all'>
 
@@ -116,6 +117,37 @@ export const su7ConceptPack = {
     scale: 100,
     rotation: [0, -Math.PI / 2, 0] as const,
     position: [0, 0, 0] as const,
+  },
+  cargoVolume: {
+    /** Meter-space calibration inside vehicleRoot. Kept in the pack so another car can replace it. */
+    floorY: 0.76,
+    floorPolygon: [
+      [0.94, -0.62],
+      [1.82, -0.62],
+      [1.94, -0.48],
+      [1.94, 0.48],
+      [1.82, 0.62],
+      [0.94, 0.62],
+    ] as const,
+    opening: { width: 1.18, height: 0.78 },
+    maxHeight: 0.78,
+    searchRadius: 0.24,
+    searchStep: 0.06,
+    anchors: {
+      rear_left: { position: [1.35, 0.76, -0.23], rotationX: Math.PI / 2, rotationY: Math.PI / 2 },
+      rear_right: { position: [1.35, 0.76, 0.23], rotationX: Math.PI / 2, rotationY: Math.PI / 2 },
+      front_center: { position: [1.12, 0.76, 0], rotationX: Math.PI / 2, rotationY: Math.PI / 2 },
+    } satisfies Record<CargoAnchorId, { position: readonly [number, number, number]; rotationX: number; rotationY: number }>,
+    layouts: {
+      two_suitcases: {
+        placements: {
+          checked_24: { anchorId: 'rear_left', position: [1.6825, 0.8975, -0.23], rotationX: Math.PI / 2, rotationY: Math.PI / 2 },
+          carry_on_20: { anchorId: 'rear_right', position: [1.63, 0.875, 0.23], rotationX: Math.PI / 2, rotationY: Math.PI / 2 },
+        },
+      },
+    } satisfies Record<CargoLayoutId, {
+      placements: Partial<Record<PropId, { anchorId: CargoAnchorId; position: readonly [number, number, number]; rotationX: number; rotationY: number }>>
+    }>,
   },
   attribution: {
     author: 'Ddiaz Design',
@@ -673,6 +705,16 @@ export const su7ConceptPack = {
       position: [6.1, 2.15, -4.8],
       target: [0, 0.72, 0],
       transitionMs: 450,
+    },
+    cargo_rear: {
+      position: [4.7, 2.25, -3.2],
+      target: [1.72, 0.72, 0],
+      transitionMs: 500,
+    },
+    cargo_overview: {
+      position: [3.8, 4.15, -2.25],
+      target: [1.72, 0.55, 0],
+      transitionMs: 650,
     },
     turntable: {
       position: [-5.8, 2.15, 5.8],
