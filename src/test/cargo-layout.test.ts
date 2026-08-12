@@ -5,6 +5,9 @@ import {
   candidateAtPosition,
   cargoBoundsIntersect,
   dimensionsForOrientation,
+  conflictsWithHatchSweep,
+  contactOffsetForOrientation,
+  transformGroundContact,
 } from '../runtime/cargo-layout'
 import { dispatchVehicleAction } from '../runtime/action-dispatcher'
 import { useExperienceStore } from '../store/experience-store'
@@ -22,6 +25,8 @@ function loaded(instanceId: string, propId: 'carry_on_20' | 'checked_24', x: num
     position: result.candidate.position,
     rotation: result.candidate.rotation,
     occupiedBounds: result.candidate.bounds,
+    supportHeight: result.candidate.supportHeight,
+    contactOffsetY: result.candidate.contactOffsetY,
     anchorId: null,
   }
 }
@@ -53,10 +58,62 @@ describe('real cargo volume placement', () => {
     }
   })
 
+  it('derives every stable pose center from the sampled support surface', () => {
+    const entry = findProp('carry_on_20')!
+    for (const orientation of ['upright', 'flat', 'side'] as const) {
+      const result = candidateAtPosition(entry.id, 1.95, 0, orientation, Math.PI / 2, [])
+      if (!result.ok && result.reason === 'blocked-opening') continue
+      expect(result.ok).toBe(true)
+      if (!result.ok) continue
+      expect(result.candidate.bounds.center[1] - result.candidate.bounds.halfSize[1])
+        .toBeCloseTo(result.candidate.supportHeight)
+    }
+  })
+
+  it('uses wheels for upright and shell contacts for flat and side poses', () => {
+    for (const propId of ['carry_on_20', 'checked_24'] as const) {
+      const entry = findProp(propId)!
+      const upright = contactOffsetForOrientation(entry, 'upright', 0)
+      const flat = contactOffsetForOrientation(entry, 'flat', 0)
+      const side = contactOffsetForOrientation(entry, 'side', 0)
+      expect(upright).toBeCloseTo(entry.dimensionsM[0] / 2)
+      expect(flat).toBeLessThan(entry.dimensionsM[2] / 2)
+      expect(side).toBeLessThan(entry.dimensionsM[1] / 2)
+    }
+  })
+
+  it('keeps contact height invariant under horizontal yaw', () => {
+    const entry = findProp('carry_on_20')!
+    for (const orientation of ['upright', 'flat', 'side'] as const) {
+      const base = contactOffsetForOrientation(entry, orientation, 0)
+      for (const yaw of [0.37, Math.PI / 2, Math.PI * 1.73]) {
+        expect(contactOffsetForOrientation(entry, orientation, yaw)).toBeCloseTo(base)
+        const transformed = entry.groundContacts[orientation].map((point) => transformGroundContact(point, orientation, yaw))
+        expect(Math.min(...transformed.map((point) => point[1])) + base).toBeCloseTo(0)
+      }
+    }
+  })
+
+  it('rejects a bottom footprint that is only partially supported', () => {
+    const result = candidateAtPosition('checked_24', 2.30, 0.34, 'flat', 0, [], true)
+    expect(result).toMatchObject({ ok: false, reason: 'incomplete-floor-support' })
+  })
+
+  it('rejects calibrated seat-back and sill overlap', () => {
+    const seat = candidateAtPosition('carry_on_20', 1.50, 0, 'flat', 0, [], true)
+    expect(seat.ok).toBe(false)
+    if (!seat.ok) expect(['intersects-interior', 'incomplete-floor-support', 'intersects-wall']).toContain(seat.reason)
+  })
+
+  it('reports luggage intersecting the calibrated hatch sweep', () => {
+    const bounds = boundsForPose(findProp('carry_on_20')!, [2.25, 1.05, 0], 'upright', 0)
+    expect(conflictsWithHatchSweep(bounds)).toBe(true)
+  })
+
   it('rejects wheel-arch/side-wall penetration from the closed proxy volume', () => {
     const result = candidateAtPosition('carry_on_20', 1.54, -0.52, 'flat', 0, [])
     expect(result.ok).toBe(false)
-    if (!result.ok) expect(['intersects-wall', 'outside-volume']).toContain(result.reason)
+    if (!result.ok) expect(['intersects-wall', 'outside-volume', 'incomplete-floor-support']).toContain(result.reason)
   })
 
   it('rejects a pose that cannot pass through the hatch opening', () => {
@@ -111,6 +168,8 @@ describe('real cargo volume placement', () => {
         position: overlap.candidate.position,
         rotation: overlap.candidate.rotation,
         occupiedBounds: overlap.candidate.bounds,
+        supportHeight: overlap.candidate.supportHeight,
+        contactOffsetY: overlap.candidate.contactOffsetY,
         anchorId: null,
       } : null,
       valid: false,

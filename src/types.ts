@@ -86,6 +86,8 @@ export type CargoPlacement = {
   position: readonly [number, number, number]
   rotation: readonly [number, number, number]
   occupiedBounds: CargoBounds
+  supportHeight: number
+  contactOffsetY: number
   anchorId: CargoAnchorId | null
   /** Transient animation origin; omitted after loading/returning completes. */
   transitionFrom?: readonly [number, number, number]
@@ -94,9 +96,12 @@ export type CargoPlacement = {
 export type CargoPlacementReason =
   | 'outside-volume'
   | 'intersects-wall'
+  | 'intersects-interior'
+  | 'hatch-sweep-conflict'
   | 'blocked-opening'
   | 'occupied'
   | 'floor-support-required'
+  | 'incomplete-floor-support'
 
 export type CargoPlacementSession = {
   instanceId: CargoInstanceId

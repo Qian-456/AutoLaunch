@@ -125,11 +125,30 @@ export const su7ConceptPack = {
      * interpolate the usable boundary at any height. The indents model wheel arches;
      * upper rings model the side/roof taper.
      */
-    floorY: 0.76,
+    floorY: 0.735,
+    /** Calibrated proxies for fixed, unnamed cargo-trim meshes in the source GLB. */
+    supportTolerance: 0.012,
+    supportSurfaces: [
+      {
+        id: 'cargo_carpet_main',
+        height: 0.735,
+        polygon: [[1.49, -0.40], [1.66, -0.40], [1.72, -0.53], [2.18, -0.53], [2.34, -0.39], [2.34, 0.39], [2.18, 0.53], [1.72, 0.53], [1.66, 0.40], [1.49, 0.40]],
+      },
+    ],
+    interiorObstacles: [
+      { id: 'seat_back', center: [1.43, 1.02, 0], halfSize: [0.055, 0.27, 0.43] },
+      { id: 'wheel_arch_left', center: [1.92, 0.87, -0.56], halfSize: [0.34, 0.13, 0.06] },
+      { id: 'wheel_arch_right', center: [1.92, 0.87, 0.56], halfSize: [0.34, 0.13, 0.06] },
+      { id: 'rear_sill', center: [2.39, 0.81, 0], halfSize: [0.055, 0.075, 0.43] },
+    ],
+    hatchSweep: {
+      center: [2.20, 1.14, 0],
+      halfSize: [0.23, 0.20, 0.45],
+    },
     collider: {
       id: 'su7_cargo_volume_proxy_v1',
       sections: [
-        { y: 0.76, polygon: [[1.46, -0.43], [1.63, -0.43], [1.70, -0.58], [2.22, -0.58], [2.40, -0.43], [2.40, 0.43], [2.22, 0.58], [1.70, 0.58], [1.63, 0.43], [1.46, 0.43]] },
+        { y: 0.735, polygon: [[1.46, -0.43], [1.63, -0.43], [1.70, -0.58], [2.22, -0.58], [2.40, -0.43], [2.40, 0.43], [2.22, 0.58], [1.70, 0.58], [1.63, 0.43], [1.46, 0.43]] },
         { y: 1.10, polygon: [[1.48, -0.42], [1.65, -0.42], [1.72, -0.55], [2.19, -0.55], [2.36, -0.41], [2.36, 0.41], [2.19, 0.55], [1.72, 0.55], [1.65, 0.42], [1.48, 0.42]] },
         { y: 1.42, polygon: [[1.52, -0.35], [1.68, -0.35], [1.75, -0.47], [2.12, -0.47], [2.27, -0.35], [2.27, 0.35], [2.12, 0.47], [1.75, 0.47], [1.68, 0.35], [1.52, 0.35]] },
       ],
@@ -144,9 +163,9 @@ export const su7ConceptPack = {
     searchRadius: 0.24,
     searchStep: 0.06,
     anchors: {
-      rear_left: { position: [1.85, 0.76, -0.23], rotationX: Math.PI / 2, rotationY: Math.PI / 2 },
-      rear_right: { position: [1.85, 0.76, 0.23], rotationX: Math.PI / 2, rotationY: Math.PI / 2 },
-      front_center: { position: [1.62, 0.76, 0], rotationX: Math.PI / 2, rotationY: Math.PI / 2 },
+      rear_left: { position: [1.85, 0.735, -0.23], rotationX: Math.PI / 2, rotationY: Math.PI / 2 },
+      rear_right: { position: [1.85, 0.735, 0.23], rotationX: Math.PI / 2, rotationY: Math.PI / 2 },
+      front_center: { position: [1.62, 0.735, 0], rotationX: Math.PI / 2, rotationY: Math.PI / 2 },
     } satisfies Record<CargoAnchorId, { position: readonly [number, number, number]; rotationX: number; rotationY: number }>,
     layouts: {
       two_suitcases: {

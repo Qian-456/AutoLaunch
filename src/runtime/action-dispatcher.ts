@@ -21,7 +21,7 @@ import type {
   WindowTarget,
 } from '../types'
 import { findProp, type PropId } from '../props/prop-catalog'
-import { candidateAtPosition, findCargoPlacement, type CargoPlacementCandidate } from './cargo-layout'
+import { candidateAtPosition, conflictsWithHatchSweep, findCargoPlacement, type CargoPlacementCandidate } from './cargo-layout'
 
 export type DispatchResult =
   | { ok: true; message: string; actionId?: string }
@@ -32,6 +32,9 @@ let nextCargoInstanceId = 1
 type VehicleRuntimeAction = Exclude<VehicleAction, { type: 'orbit' } | { type: 'cargo' }>
 
 const cargoReasonLabels = {
+  'incomplete-floor-support': '行李箱底部没有得到完整地板支撑',
+  'intersects-interior': '行李箱与后备厢内饰、轮拱或门槛重叠',
+  'hatch-sweep-conflict': '行李箱占用了尾门关闭所需空间',
   'outside-volume': '物品会超出后备箱真实可用空间',
   'intersects-wall': '物品与后备箱内壁或轮拱发生碰撞',
   'blocked-opening': '当前姿态无法通过后备箱入口',
@@ -53,6 +56,8 @@ function loadingPlacement(
     position: candidate.position,
     rotation: candidate.rotation,
     occupiedBounds: candidate.bounds,
+    supportHeight: candidate.supportHeight,
+    contactOffsetY: candidate.contactOffsetY,
     anchorId: candidate.anchorId,
     transitionFrom,
   }
@@ -436,6 +441,16 @@ export function dispatchVehicleAction(action: VehicleAction): DispatchResult {
     )
   ) {
     return { ok: false, message: '行李箱正在移动，完成装载或取出后才能关闭后备箱' }
+  }
+
+  if (
+    ((action.type === 'trunk' && !action.open && !action.frunk)
+      || (action.type === 'hatch' && action.target === 'rear_hatch' && !action.open))
+    && [...useExperienceStore.getState().cargoPlacements.values()].some(
+      (placement) => placement.state === 'loaded' && conflictsWithHatchSweep(placement.occupiedBounds),
+    )
+  ) {
+    return { ok: false, message: cargoReasonLabels['hatch-sweep-conflict'] }
   }
 
   // Legacy trunk alias → normalized hatch action.

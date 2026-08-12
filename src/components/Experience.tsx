@@ -1,7 +1,7 @@
-import { Component, Suspense, useCallback, useEffect, useMemo, type ErrorInfo, type ReactNode } from 'react'
+import { Component, Suspense, useCallback, useEffect, useMemo, useRef, type ErrorInfo, type ReactNode } from 'react'
 import { ContactShadows, Edges, Html } from '@react-three/drei'
-import type { ThreeEvent } from '@react-three/fiber'
-import { BufferGeometry, DoubleSide, Float32BufferAttribute } from 'three'
+import { useFrame, type ThreeEvent } from '@react-three/fiber'
+import { BufferGeometry, DoubleSide, Float32BufferAttribute, MathUtils, PointLight, SpotLight } from 'three'
 import { VehicleModel } from './VehicleModel'
 import { OrbitCameraRig } from './OrbitCameraRig'
 import { useExperienceStore } from '../store/experience-store'
@@ -76,12 +76,35 @@ function CargoVolumeVisualizer({ invalid }: { invalid: boolean }) {
 }
 
 const reasonLabels = {
+  'incomplete-floor-support': '底部未被后备厢地板完整支撑',
+  'intersects-interior': '与内饰、轮拱或门槛重叠',
+  'hatch-sweep-conflict': '占用尾门关闭空间',
   'outside-volume': '超出后备箱可用容积',
   'intersects-wall': '碰到内壁或轮拱',
   'blocked-opening': '当前姿态无法通过尾门开口',
   occupied: '与已有箱子重叠',
   'floor-support-required': '只能放在后备箱地板上',
 } as const
+
+function CargoInteriorLights() {
+  const point = useRef<PointLight>(null)
+  const fill = useRef<SpotLight>(null)
+  const trunkOpen = useExperienceStore((state) => state.vehiclePartStates.get('trunk') === 'open')
+  const activeOrbitPreset = useExperienceStore((state) => state.activeOrbitPreset)
+  const cargoActive = trunkOpen || activeOrbitPreset === 'cargo_rear' || activeOrbitPreset === 'cargo_overview'
+  useFrame((_, delta) => {
+    const targetPoint = cargoActive ? 2.4 : 0
+    const targetFill = cargoActive ? 1.15 : 0
+    if (point.current) point.current.intensity = MathUtils.damp(point.current.intensity, targetPoint, 7, delta)
+    if (fill.current) fill.current.intensity = MathUtils.damp(fill.current.intensity, targetFill, 7, delta)
+  })
+  return (
+    <>
+      <pointLight ref={point} position={[1.72, 1.26, -0.34]} intensity={0} distance={1.35} decay={2.1} color="#ffe2b0" />
+      <spotLight ref={fill} position={[2.38, 1.38, 0]} target-position={[1.83, 0.78, 0]} intensity={0} distance={1.7} angle={0.62} penumbra={0.82} decay={2} color="#d7ebff" />
+    </>
+  )
+}
 
 function CargoPlacementController({ onFeedback }: { onFeedback: (message: string) => void }) {
   const session = useExperienceStore((state) => state.cargoPlacementSession)
@@ -113,6 +136,8 @@ function CargoPlacementController({ onFeedback }: { onFeedback: (message: string
         position: result.candidate.position,
         rotation: result.candidate.rotation,
         occupiedBounds: result.candidate.bounds,
+        supportHeight: result.candidate.supportHeight,
+        contactOffsetY: result.candidate.contactOffsetY,
         anchorId: null,
       } : null,
       valid: result.ok,
@@ -134,22 +159,15 @@ function CargoPlacementController({ onFeedback }: { onFeedback: (message: string
       const current = useExperienceStore.getState().cargoPlacementSession
       if (event.key === 'Shift' && current) setSession({ ...current, precisionMode: false })
     }
-    const wheel = (event: WheelEvent) => {
-      event.preventDefault()
-      const direction = event.deltaY > 0 ? 1 : -1
-      onFeedback(dispatchVehicleAction({ type: 'cargo', operation: 'rotate', direction, degrees: 5 }).message)
-    }
     const contextmenu = (event: MouseEvent) => {
       event.preventDefault()
     }
     window.addEventListener('keydown', keydown)
     window.addEventListener('keyup', keyup)
-    window.addEventListener('wheel', wheel, { passive: false })
     window.addEventListener('contextmenu', contextmenu)
     return () => {
       window.removeEventListener('keydown', keydown)
       window.removeEventListener('keyup', keyup)
-      window.removeEventListener('wheel', wheel)
       window.removeEventListener('contextmenu', contextmenu)
     }
   }, [onFeedback, session, setSession, updateAt])
@@ -184,7 +202,7 @@ function CargoPlacementController({ onFeedback }: { onFeedback: (message: string
           <Html position={[session.candidate.position[0], session.candidate.position[1] + session.candidate.occupiedBounds.halfSize[1] + 0.12, session.candidate.position[2]]} center>
             <div className={`cargo-placement-hint${session.valid ? ' valid' : ' invalid'}`}>
               <strong>{session.valid ? (session.snappedToInstanceId ? '已吸附 · 单击放置' : '单击放置') : reasonLabels[session.reason ?? 'outside-volume']}</strong>
-              <span>滚轮/QE 旋转 · R 换姿态 · 右键拖动镜头 · Esc 取消</span>
+              <span>Q/E 旋转 · R 换姿态 · 滚轮缩放视线 · 右键拖动镜头 · Esc 取消</span>
             </div>
           </Html>
         </>
@@ -214,6 +232,7 @@ export function Experience({
       <directionalLight position={[-5, 3, -4]} intensity={1.35} color="#91b9ff" />
       <spotLight position={[0, 6, -5]} intensity={3.2} angle={0.55} penumbra={0.8} color="#ffd15c" />
       <pointLight position={[1.45, 1.65, 0]} intensity={1.8} distance={2.6} decay={1.8} color="#e8fff9" />
+      <CargoInteriorLights />
       <Suspense fallback={null}><VehicleModel /></Suspense>
       {stageMode === 'studio' && [...cargoPlacements.values()]
         .filter((placement) => placement.instanceId !== sessionInstanceId)
@@ -229,6 +248,18 @@ export function Experience({
           )
         })}
       {stageMode === 'studio' && <CargoPlacementController onFeedback={onCargoFeedback} />}
+      {stageMode === 'studio' && [...cargoPlacements.values()].filter((placement) => placement.state !== 'returning').map((placement) => (
+        <ContactShadows
+          key={`contact-${placement.instanceId}`}
+          position={[placement.position[0], placement.supportHeight + 0.002, placement.position[2]]}
+          opacity={0.78}
+          scale={Math.max(placement.occupiedBounds.halfSize[0], placement.occupiedBounds.halfSize[2]) * 2.35}
+          blur={1.1}
+          far={0.32}
+          resolution={256}
+          frames={8}
+        />
+      ))}
       <ContactShadows position={[0, -0.015, 0]} opacity={0.72} scale={12} blur={2.6} far={5} frames={3} />
       {stageMode === 'launch' ? <LaunchStage /> : (
         <mesh rotation-x={-Math.PI / 2} position-y={-0.03} receiveShadow>
