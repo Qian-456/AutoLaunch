@@ -29,6 +29,15 @@ describe('rear hatch moving assembly', () => {
   })
 })
 
+describe('cargo camera composition', () => {
+  it('uses a centred rear view instead of locking the user into a side angle', () => {
+    const cargoRear = su7ConceptPack.orbitActions.cargo_rear
+    expect(cargoRear.position[0]).toBeGreaterThan(cargoRear.target[0])
+    expect(cargoRear.position[2]).toBe(0)
+    expect(cargoRear.target[2]).toBe(0)
+  })
+})
+
 describe('registered VehicleAction pipeline', () => {
   beforeEach(() => {
     useExperienceStore.setState({

@@ -119,30 +119,40 @@ export const su7ConceptPack = {
     position: [0, 0, 0] as const,
   },
   cargoVolume: {
-    /** Meter-space calibration inside vehicleRoot. Kept in the pack so another car can replace it. */
+    /**
+     * Closed low-poly cargo proxy in vehicleRoot metre space. Each horizontal ring
+     * has the same vertex count so the runtime can render a watertight collider and
+     * interpolate the usable boundary at any height. The indents model wheel arches;
+     * upper rings model the side/roof taper.
+     */
     floorY: 0.76,
-    floorPolygon: [
-      [0.94, -0.62],
-      [1.82, -0.62],
-      [1.94, -0.48],
-      [1.94, 0.48],
-      [1.82, 0.62],
-      [0.94, 0.62],
-    ] as const,
-    opening: { width: 1.18, height: 0.78 },
-    maxHeight: 0.78,
+    collider: {
+      id: 'su7_cargo_volume_proxy_v1',
+      sections: [
+        { y: 0.76, polygon: [[1.46, -0.43], [1.63, -0.43], [1.70, -0.58], [2.22, -0.58], [2.40, -0.43], [2.40, 0.43], [2.22, 0.58], [1.70, 0.58], [1.63, 0.43], [1.46, 0.43]] },
+        { y: 1.10, polygon: [[1.48, -0.42], [1.65, -0.42], [1.72, -0.55], [2.19, -0.55], [2.36, -0.41], [2.36, 0.41], [2.19, 0.55], [1.72, 0.55], [1.65, 0.42], [1.48, 0.42]] },
+        { y: 1.42, polygon: [[1.52, -0.35], [1.68, -0.35], [1.75, -0.47], [2.12, -0.47], [2.27, -0.35], [2.27, 0.35], [2.12, 0.47], [1.75, 0.47], [1.68, 0.35], [1.52, 0.35]] },
+      ],
+      color: '#25e6c2',
+      maxInstances: 20,
+      snapDistance: 0.05,
+      snapGap: 0.005,
+    },
+    floorPolygon: [[1.46, -0.43], [1.63, -0.43], [1.70, -0.58], [2.22, -0.58], [2.40, -0.43], [2.40, 0.43], [2.22, 0.58], [1.70, 0.58], [1.63, 0.43], [1.46, 0.43]] as const,
+    opening: { width: 1.08, height: 0.66 },
+    maxHeight: 0.66,
     searchRadius: 0.24,
     searchStep: 0.06,
     anchors: {
-      rear_left: { position: [1.35, 0.76, -0.23], rotationX: Math.PI / 2, rotationY: Math.PI / 2 },
-      rear_right: { position: [1.35, 0.76, 0.23], rotationX: Math.PI / 2, rotationY: Math.PI / 2 },
-      front_center: { position: [1.12, 0.76, 0], rotationX: Math.PI / 2, rotationY: Math.PI / 2 },
+      rear_left: { position: [1.85, 0.76, -0.23], rotationX: Math.PI / 2, rotationY: Math.PI / 2 },
+      rear_right: { position: [1.85, 0.76, 0.23], rotationX: Math.PI / 2, rotationY: Math.PI / 2 },
+      front_center: { position: [1.62, 0.76, 0], rotationX: Math.PI / 2, rotationY: Math.PI / 2 },
     } satisfies Record<CargoAnchorId, { position: readonly [number, number, number]; rotationX: number; rotationY: number }>,
     layouts: {
       two_suitcases: {
         placements: {
-          checked_24: { anchorId: 'rear_left', position: [1.6825, 0.8975, -0.23], rotationX: Math.PI / 2, rotationY: Math.PI / 2 },
-          carry_on_20: { anchorId: 'rear_right', position: [1.63, 0.875, 0.23], rotationX: Math.PI / 2, rotationY: Math.PI / 2 },
+          checked_24: { anchorId: 'rear_left', position: [1.49, 1.0925, -0.29], rotationX: 0, rotationY: Math.PI / 2 },
+          carry_on_20: { anchorId: 'rear_right', position: [1.49, 1.04, 0.25], rotationX: 0, rotationY: Math.PI / 2 },
         },
       },
     } satisfies Record<CargoLayoutId, {
@@ -707,8 +717,8 @@ export const su7ConceptPack = {
       transitionMs: 450,
     },
     cargo_rear: {
-      position: [4.7, 2.25, -3.2],
-      target: [1.72, 0.72, 0],
+      position: [5.65, 1.72, 0],
+      target: [2.02, 0.93, 0],
       transitionMs: 500,
     },
     cargo_overview: {

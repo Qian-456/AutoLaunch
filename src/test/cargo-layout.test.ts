@@ -1,114 +1,132 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { findProp } from '../props/prop-catalog'
 import {
-  boundsForProp,
+  boundsForPose,
+  candidateAtPosition,
   cargoBoundsIntersect,
-  findCargoPlacement,
-  placementFromLayout,
-  validateCargoCandidate,
+  dimensionsForOrientation,
 } from '../runtime/cargo-layout'
 import { dispatchVehicleAction } from '../runtime/action-dispatcher'
 import { useExperienceStore } from '../store/experience-store'
 import type { CargoPlacement } from '../types'
 import { su7ConceptPack } from '../pack/su7-concept.pack'
 
-function loaded(propId: 'carry_on_20' | 'checked_24', layout: 'two_suitcases'): CargoPlacement {
-  const candidate = placementFromLayout(propId, layout)
-  if (!candidate) throw new Error(`missing layout for ${propId}`)
+function loaded(instanceId: string, propId: 'carry_on_20' | 'checked_24', x: number, z: number): CargoPlacement {
+  const result = candidateAtPosition(propId, x, z, 'flat', Math.PI / 2, [])
+  if (!result.ok) throw new Error(`invalid fixture: ${result.reason}`)
   return {
-    propId,
+    instanceId,
+    catalogPropId: propId,
     state: 'loaded',
-    position: candidate.position,
-    rotation: candidate.rotation,
-    occupiedBounds: candidate.bounds,
-    anchorId: candidate.anchorId,
+    orientation: 'flat',
+    position: result.candidate.position,
+    rotation: result.candidate.rotation,
+    occupiedBounds: result.candidate.bounds,
+    anchorId: null,
   }
 }
 
-describe('continuous cargo layout', () => {
+describe('real cargo volume placement', () => {
   beforeEach(() => {
-    useExperienceStore.setState({ cargoPlacements: new Map(), cargoArmedPropId: null, cargoReflowProposal: null })
+    useExperienceStore.setState({
+      cargoPlacements: new Map(),
+      cargoPlacementSession: null,
+      selectedCargoInstanceId: null,
+      activeActions: new Map(),
+    })
   })
 
-  it('derives collision height from the real metre dimensions', () => {
+  it('maps stable poses to their real physical dimensions', () => {
     const checked = findProp('checked_24')!
-    const bounds = boundsForProp(checked, [1.35, su7ConceptPack.cargoVolume.floorY, -0.28], 0)
-    expect(bounds.halfSize).toEqual([0.433 / 2, 0.665 / 2, 0.275 / 2])
-    expect(bounds.center[1] - bounds.halfSize[1]).toBeCloseTo(su7ConceptPack.cargoVolume.floorY)
+    expect(dimensionsForOrientation(checked, 'upright')).toEqual([0.433, 0.665, 0.275])
+    expect(dimensionsForOrientation(checked, 'flat')).toEqual([0.433, 0.275, 0.665])
+    expect(dimensionsForOrientation(checked, 'side')).toEqual([0.665, 0.433, 0.275])
   })
 
-  it('distinguishes intersecting and separated oriented boxes', () => {
+  it('places every pose exactly on the cargo floor', () => {
+    const entry = findProp('carry_on_20')!
+    for (const orientation of ['upright', 'flat', 'side'] as const) {
+      const [, height] = dimensionsForOrientation(entry, orientation)
+      const center = [2, su7ConceptPack.cargoVolume.floorY + height / 2, 0] as const
+      const bounds = boundsForPose(entry, center, orientation, 0.37)
+      expect(bounds.center[1] - bounds.halfSize[1]).toBeCloseTo(su7ConceptPack.cargoVolume.floorY)
+    }
+  })
+
+  it('rejects wheel-arch/side-wall penetration from the closed proxy volume', () => {
+    const result = candidateAtPosition('carry_on_20', 1.54, -0.52, 'flat', 0, [])
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(['intersects-wall', 'outside-volume']).toContain(result.reason)
+  })
+
+  it('rejects a pose that cannot pass through the hatch opening', () => {
+    const result = candidateAtPosition('checked_24', 2, 0, 'upright', 0, [])
+    expect(result).toMatchObject({ ok: false, reason: 'blocked-opening' })
+  })
+
+  it('distinguishes overlap from legal side contact', () => {
     const carryOn = findProp('carry_on_20')!
-    const first = boundsForProp(carryOn, [1.7, 0.43, -0.25], 0)
-    const overlapping = boundsForProp(carryOn, [1.7, 0.43, -0.15], Math.PI / 2)
-    const separated = boundsForProp(carryOn, [1.7, 0.43, 0.25], 0)
+    const first = boundsForPose(carryOn, [2, 0.875, -0.22], 'flat', Math.PI / 2)
+    const overlapping = boundsForPose(carryOn, [2, 0.875, -0.1], 'flat', Math.PI / 2)
+    const separated = boundsForPose(carryOn, [2, 0.875, 0.36], 'flat', Math.PI / 2)
     expect(cargoBoundsIntersect(first, overlapping)).toBe(true)
     expect(cargoBoundsIntersect(first, separated)).toBe(false)
   })
 
-  it('rejects a candidate outside the calibrated cargo floor', () => {
-    const carryOn = findProp('carry_on_20')!
-    const position = [2.45, 0.43, 0] as const
-    const candidate = {
-      position,
-      rotation: [0, 0, 0] as const,
-      bounds: boundsForProp(carryOn, position, 0),
-      anchorId: 'rear_left' as const,
-    }
-    expect(validateCargoCandidate(carryOn, candidate, [])).toEqual({ ok: false, reason: 'outside-cargo-volume' })
-  })
-
-  it('keeps unused continuous space available instead of locking an anchor region', () => {
-    const first = findCargoPlacement('carry_on_20', [], 'rear_left')
-    expect(first.ok).toBe(true)
-    if (!first.ok) return
-    const occupied: CargoPlacement = {
-      propId: 'carry_on_20',
-      state: 'loaded',
-      position: first.candidate.position,
-      rotation: first.candidate.rotation,
-      occupiedBounds: first.candidate.bounds,
-      anchorId: first.candidate.anchorId,
-    }
-    // A second physical box definition can still find room at another nearby anchor;
-    // occupancy is its OBB, not a boolean lock on the whole cargo volume.
-    const second = findCargoPlacement('checked_24', [occupied], 'rear_right')
+  it('soft-snaps a second floor item to a legal neighbouring side', () => {
+    const first = loaded('carry-1', 'carry_on_20', 2, -0.25)
+    // With a 90° yaw the 37cm width lies on world Z; start 3.5cm short of the
+    // legal 5mm side gap so the soft magnet can finish the alignment.
+    const rawZ = first.position[2] + 0.34
+    const second = candidateAtPosition('carry_on_20', first.position[0], rawZ, 'flat', Math.PI / 2, [first])
     expect(second.ok).toBe(true)
+    if (!second.ok) return
+    expect(second.candidate.snappedToInstanceId).toBe('carry-1')
+    expect(cargoBoundsIntersect(first.occupiedBounds, second.candidate.bounds)).toBe(false)
   })
 
-  it('registers a non-overlapping two-suitcase fallback layout', () => {
-    const checked = loaded('checked_24', 'two_suitcases')
-    const carryOn = loaded('carry_on_20', 'two_suitcases')
-    expect(checked.rotation[0]).toBeCloseTo(Math.PI / 2)
-    expect(carryOn.rotation[0]).toBeCloseTo(Math.PI / 2)
-    expect(checked.occupiedBounds.halfSize[1] * 2).toBeCloseTo(0.275)
-    expect(carryOn.occupiedBounds.halfSize[1] * 2).toBeCloseTo(0.23)
-    expect(cargoBoundsIntersect(checked.occupiedBounds, carryOn.occupiedBounds)).toBe(false)
-    expect(validateCargoCandidate(findProp('checked_24')!, placementFromLayout('checked_24', 'two_suitcases')!, [])?.ok).toBe(true)
-    expect(validateCargoCandidate(findProp('carry_on_20')!, placementFromLayout('carry_on_20', 'two_suitcases')!, [checked])?.ok).toBe(true)
+  it('creates independent instances for repeated additions', () => {
+    expect(dispatchVehicleAction({ type: 'cargo', operation: 'spawn', propId: 'carry_on_20' }).ok).toBe(true)
+    expect(dispatchVehicleAction({ type: 'cargo', operation: 'confirm' }).ok).toBe(true)
+    expect(dispatchVehicleAction({ type: 'cargo', operation: 'spawn', propId: 'carry_on_20' }).ok).toBe(true)
+    const session = useExperienceStore.getState().cargoPlacementSession
+    expect(session).not.toBeNull()
+    expect(session?.instanceId).not.toBe([...useExperienceStore.getState().cargoPlacements.keys()][0])
   })
 
-  it('routes deterministic combination actions through the shared dispatcher', () => {
-    const result = dispatchVehicleAction({ type: 'cargo', operation: 'demonstrate', combinationId: 'two_suitcases' })
-    const placements = useExperienceStore.getState().cargoPlacements
-    expect(result.ok).toBe(true)
-    expect([...placements.keys()]).toEqual(['checked_24', 'carry_on_20'])
-    expect([...placements.values()].every((placement) => placement.state === 'loading')).toBe(true)
-    expect(useExperienceStore.getState().activeOrbitPreset).toBe('cargo_rear')
-  })
-
-  it('supports an armed prop and clears selection after a left/right placement action', () => {
-    useExperienceStore.getState().setCargoArmedProp('carry_on_20')
-    expect(useExperienceStore.getState().cargoArmedPropId).toBe('carry_on_20')
-    const result = dispatchVehicleAction({
-      type: 'cargo',
-      operation: 'place',
-      propId: 'carry_on_20',
-      preferredAnchor: 'rear_right',
+  it('never confirms an overlapping ghost into the placement map', () => {
+    const first = loaded('carry-locked', 'carry_on_20', 2, 0)
+    useExperienceStore.getState().setCargoPlacement(first)
+    dispatchVehicleAction({ type: 'cargo', operation: 'spawn', propId: 'carry_on_20' })
+    const session = useExperienceStore.getState().cargoPlacementSession!
+    const overlap = candidateAtPosition('carry_on_20', first.position[0], first.position[2], 'flat', Math.PI / 2, [first], true)
+    expect(overlap).toMatchObject({ ok: false, reason: 'occupied' })
+    useExperienceStore.getState().setCargoPlacementSession({
+      ...session,
+      candidate: overlap.candidate ? {
+        instanceId: session.instanceId,
+        catalogPropId: session.catalogPropId,
+        state: 'dragging',
+        orientation: overlap.candidate.orientation,
+        position: overlap.candidate.position,
+        rotation: overlap.candidate.rotation,
+        occupiedBounds: overlap.candidate.bounds,
+        anchorId: null,
+      } : null,
+      valid: false,
+      reason: 'occupied',
     })
+    expect(dispatchVehicleAction({ type: 'cargo', operation: 'confirm' }).ok).toBe(false)
+    expect(useExperienceStore.getState().cargoPlacements.size).toBe(1)
+  })
+
+  it('builds the demonstration through the shared floor solver', () => {
+    const result = dispatchVehicleAction({ type: 'cargo', operation: 'demonstrate', combinationId: 'two_suitcases' })
+    const placements = [...useExperienceStore.getState().cargoPlacements.values()]
     expect(result.ok).toBe(true)
-    expect(useExperienceStore.getState().cargoArmedPropId).toBeNull()
-    expect(useExperienceStore.getState().cargoPlacements.get('carry_on_20')?.anchorId).toBe('rear_right')
+    expect(placements).toHaveLength(2)
+    expect(placements.every((placement) => placement.orientation === 'flat')).toBe(true)
+    expect(cargoBoundsIntersect(placements[0].occupiedBounds, placements[1].occupiedBounds)).toBe(false)
   })
 
   it('prevents the rear hatch from closing during a cargo transition', () => {

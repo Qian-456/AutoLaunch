@@ -2,8 +2,9 @@ import { create } from 'zustand'
 import type {
   ActionTerminalStatus,
   ActiveVehicleAction,
-  CargoLayoutId,
   CargoPlacement,
+  CargoPlacementSession,
+  CargoInstanceId,
   LightPartId,
   OrbitPreset,
   VehiclePartId,
@@ -11,7 +12,6 @@ import type {
   VoiceState,
   WindowTarget,
 } from '../types'
-import type { PropId } from '../props/prop-catalog'
 import { WINDOW_TARGETS } from '../pack/su7-concept.pack'
 
 type ActionOutcome = { id: string; status: ActionTerminalStatus } | null
@@ -34,9 +34,9 @@ type ExperienceState = {
   windowProgress: Map<Exclude<WindowTarget, 'all'>, number>
   lightStates: Map<LightPartId, boolean>
   activeActions: Map<string, ActiveVehicleAction>
-  cargoPlacements: Map<PropId, CargoPlacement>
-  cargoArmedPropId: PropId | null
-  cargoReflowProposal: { propId: PropId; layoutId: CargoLayoutId } | null
+  cargoPlacements: Map<CargoInstanceId, CargoPlacement>
+  cargoPlacementSession: CargoPlacementSession | null
+  selectedCargoInstanceId: CargoInstanceId | null
   lastActionOutcome: ActionOutcome
   setStageMode: (mode: ExperienceState['stageMode']) => void
   requestOrbit: (preset: OrbitPreset) => void
@@ -48,9 +48,9 @@ type ExperienceState = {
   finishAction: (id: string, status: ActionTerminalStatus) => void
   setCargoPlacement: (placement: CargoPlacement) => void
   setCargoPlacements: (placements: readonly CargoPlacement[]) => void
-  removeCargoPlacement: (propId: PropId) => void
-  setCargoArmedProp: (propId: PropId | null) => void
-  setCargoReflowProposal: (proposal: ExperienceState['cargoReflowProposal']) => void
+  removeCargoPlacement: (instanceId: CargoInstanceId) => void
+  setCargoPlacementSession: (session: CargoPlacementSession | null) => void
+  setSelectedCargoInstance: (instanceId: CargoInstanceId | null) => void
 }
 
 const initialPartStates = () =>
@@ -113,8 +113,8 @@ export const useExperienceStore = create<ExperienceState>((set) => ({
   lightStates: initialLightStates(),
   activeActions: new Map(),
   cargoPlacements: new Map(),
-  cargoArmedPropId: null,
-  cargoReflowProposal: null,
+  cargoPlacementSession: null,
+  selectedCargoInstanceId: null,
   lastActionOutcome: null,
   setStageMode: (stageMode) => set({ stageMode }),
   requestOrbit: (preset) =>
@@ -138,19 +138,19 @@ export const useExperienceStore = create<ExperienceState>((set) => ({
   setCargoPlacement: (placement) =>
     set((state) => {
       const cargoPlacements = new Map(state.cargoPlacements)
-      cargoPlacements.set(placement.propId, placement)
+      cargoPlacements.set(placement.instanceId, placement)
       return { cargoPlacements }
     }),
   setCargoPlacements: (placements) =>
-    set({ cargoPlacements: new Map(placements.map((placement) => [placement.propId, placement])) }),
-  removeCargoPlacement: (propId) =>
+    set({ cargoPlacements: new Map(placements.map((placement) => [placement.instanceId, placement])) }),
+  removeCargoPlacement: (instanceId) =>
     set((state) => {
       const cargoPlacements = new Map(state.cargoPlacements)
-      cargoPlacements.delete(propId)
+      cargoPlacements.delete(instanceId)
       return { cargoPlacements }
     }),
-  setCargoArmedProp: (cargoArmedPropId) => set({ cargoArmedPropId }),
-  setCargoReflowProposal: (cargoReflowProposal) => set({ cargoReflowProposal }),
+  setCargoPlacementSession: (cargoPlacementSession) => set({ cargoPlacementSession }),
+  setSelectedCargoInstance: (selectedCargoInstanceId) => set({ selectedCargoInstanceId }),
   startAction: (execution) =>
     set((state) => {
       const activeActions = new Map(state.activeActions)

@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { OrbitControls } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
-import { Vector3 } from 'three'
+import { MOUSE, Vector3 } from 'three'
 import { su7ConceptPack } from '../pack/su7-concept.pack'
 import { useExperienceStore } from '../store/experience-store'
 import type { OrbitActionDefinition } from '../types'
@@ -24,6 +24,7 @@ export function OrbitCameraRig() {
   const orbitRequestId = useExperienceStore((state) => state.orbitRequestId)
   const manualOrbit = useExperienceStore((state) => state.manualOrbit)
   const beginManualOrbit = useExperienceStore((state) => state.beginManualOrbit)
+  const cargoPlacementActive = useExperienceStore((state) => Boolean(state.cargoPlacementSession))
   const definition: OrbitActionDefinition = su7ConceptPack.orbitActions[activeOrbitPreset]
 
   useEffect(() => {
@@ -55,9 +56,13 @@ export function OrbitCameraRig() {
     <OrbitControls
       ref={controlsRef}
       makeDefault
+      enabled
       enableDamping
       dampingFactor={0.065}
       enablePan={false}
+      mouseButtons={cargoPlacementActive
+        ? { LEFT: MOUSE.PAN, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.ROTATE }
+        : { LEFT: MOUSE.ROTATE, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.PAN }}
       minDistance={4.6}
       maxDistance={11}
       minPolarAngle={Math.PI * 0.18}

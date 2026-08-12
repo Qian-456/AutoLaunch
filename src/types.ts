@@ -57,10 +57,16 @@ export type LightsAction = {
 
 export type CargoAnchorId = 'rear_left' | 'rear_right' | 'front_center'
 export type CargoLayoutId = 'two_suitcases'
+export type CargoInstanceId = string
+export type CargoOrientation = 'upright' | 'flat' | 'side'
 
 export type CargoAction =
-  | { type: 'cargo'; operation: 'place'; propId: PropId; preferredAnchor?: CargoAnchorId }
-  | { type: 'cargo'; operation: 'remove'; propId: PropId }
+  | { type: 'cargo'; operation: 'spawn'; propId: PropId }
+  | { type: 'cargo'; operation: 'confirm' }
+  | { type: 'cargo'; operation: 'move'; instanceId: CargoInstanceId }
+  | { type: 'cargo'; operation: 'remove'; instanceId: CargoInstanceId }
+  | { type: 'cargo'; operation: 'rotate'; direction?: -1 | 1; degrees?: number; orientation?: CargoOrientation }
+  | { type: 'cargo'; operation: 'cancel' }
   | { type: 'cargo'; operation: 'clear' }
   | { type: 'cargo'; operation: 'demonstrate'; combinationId: CargoLayoutId }
 
@@ -73,14 +79,36 @@ export type CargoBounds = {
 export type CargoPlacementState = 'staged' | 'dragging' | 'loading' | 'loaded' | 'returning'
 
 export type CargoPlacement = {
-  propId: PropId
+  instanceId: CargoInstanceId
+  catalogPropId: PropId
   state: CargoPlacementState
+  orientation: CargoOrientation
   position: readonly [number, number, number]
   rotation: readonly [number, number, number]
   occupiedBounds: CargoBounds
   anchorId: CargoAnchorId | null
   /** Transient animation origin; omitted after loading/returning completes. */
   transitionFrom?: readonly [number, number, number]
+}
+
+export type CargoPlacementReason =
+  | 'outside-volume'
+  | 'intersects-wall'
+  | 'blocked-opening'
+  | 'occupied'
+  | 'floor-support-required'
+
+export type CargoPlacementSession = {
+  instanceId: CargoInstanceId
+  catalogPropId: PropId
+  orientation: CargoOrientation
+  rotationY: number
+  candidate: CargoPlacement | null
+  valid: boolean
+  reason: CargoPlacementReason | null
+  snappedToInstanceId: CargoInstanceId | null
+  precisionMode: boolean
+  originalPlacement: CargoPlacement | null
 }
 
 export type VehicleAction = OrbitAction | WindowAction | DoorAction | HatchAction | TrunkAction | LightsAction | CargoAction

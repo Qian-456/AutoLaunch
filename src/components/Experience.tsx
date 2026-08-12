@@ -1,17 +1,15 @@
-import { Component, Suspense, useMemo, useState, type ErrorInfo, type ReactNode } from 'react'
-import { ContactShadows, Edges, Html, useGLTF } from '@react-three/drei'
+import { Component, Suspense, useCallback, useEffect, useMemo, type ErrorInfo, type ReactNode } from 'react'
+import { ContactShadows, Edges, Html } from '@react-three/drei'
 import type { ThreeEvent } from '@react-three/fiber'
-import { Box3, Mesh, MeshBasicMaterial, Vector3 } from 'three'
-import { SkeletonUtils } from 'three/examples/jsm/Addons.js'
+import { BufferGeometry, DoubleSide, Float32BufferAttribute } from 'three'
 import { VehicleModel } from './VehicleModel'
 import { OrbitCameraRig } from './OrbitCameraRig'
 import { useExperienceStore } from '../store/experience-store'
-import { PropDisplay } from './PropDisplay'
-import { propCatalog, type PropCatalogEntry } from '../props/prop-catalog'
-import { findCargoPlacement } from '../runtime/cargo-layout'
+import { CargoGhost, PropDisplay } from './PropDisplay'
+import { findProp } from '../props/prop-catalog'
+import { candidateAtPosition } from '../runtime/cargo-layout'
 import { dispatchVehicleAction } from '../runtime/action-dispatcher'
 import { su7ConceptPack } from '../pack/su7-concept.pack'
-import type { CargoAnchorId } from '../types'
 
 class PropDisplayBoundary extends Component<{
   children: ReactNode
@@ -19,23 +17,12 @@ class PropDisplayBoundary extends Component<{
   onError: (assetId: string) => void
 }, { failed: boolean }> {
   state = { failed: false }
-
-  static getDerivedStateFromError() {
-    return { failed: true }
-  }
-
+  static getDerivedStateFromError() { return { failed: true } }
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('[AutoLaunch] prop failed to load:', error, info)
     this.props.onError(this.props.assetId)
   }
-
-  componentDidUpdate(previous: Readonly<{ assetId: string }>) {
-    if (previous.assetId !== this.props.assetId && this.state.failed) this.setState({ failed: false })
-  }
-
-  render() {
-    return this.state.failed ? null : this.props.children
-  }
+  render() { return this.state.failed ? null : this.props.children }
 }
 
 function LaunchStage() {
@@ -49,182 +36,156 @@ function LaunchStage() {
         <ringGeometry args={[4.02, 4.07, 128]} />
         <meshBasicMaterial color="#24e6c1" toneMapped={false} />
       </mesh>
-      <mesh rotation-x={-Math.PI / 2} position={[0, -0.01, 0]}>
-        <ringGeometry args={[3.35, 3.38, 128]} />
-        <meshBasicMaterial color="#467067" toneMapped={false} />
-      </mesh>
       <spotLight position={[0, 7, 0]} intensity={4.2} angle={0.5} penumbra={0.9} color="#bfffee" />
     </group>
   )
 }
 
-function CargoPlacementTargets({ onFeedback }: { onFeedback: (message: string) => void }) {
-  const armedPropId = useExperienceStore((state) => state.cargoArmedPropId)
-  const cargoPlacements = useExperienceStore((state) => state.cargoPlacements)
-  if (!armedPropId) return null
-  const existing = [...cargoPlacements.values()].filter(
-    (placement) => placement.propId !== armedPropId && placement.state !== 'returning',
-  )
-  const targetDefinitions: Array<{ anchorId: CargoAnchorId; label: string; color: string }> = [
-    { anchorId: 'rear_left', label: '左侧', color: '#24e6c1' },
-    { anchorId: 'rear_right', label: '右侧', color: '#55aaff' },
-  ]
-
-  return (
-    <>
-      {targetDefinitions.map(({ anchorId, label, color }) => {
-        const result = findCargoPlacement(armedPropId, existing, anchorId)
-        if (!result.ok) return null
-        const candidate = result.candidate
-        const placeHere = (event: ThreeEvent<MouseEvent>) => {
-          event.stopPropagation()
-          event.nativeEvent.stopImmediatePropagation()
-          const dispatched = dispatchVehicleAction({
-            type: 'cargo',
-            operation: 'place',
-            propId: armedPropId,
-            preferredAnchor: anchorId,
-          })
-          onFeedback(dispatched.message)
-        }
-        return (
-          <group key={anchorId}>
-            <mesh
-              position={[candidate.bounds.center[0], su7ConceptPack.cargoVolume.floorY + 0.014, candidate.bounds.center[2]]}
-              rotation-y={candidate.bounds.rotationY}
-              onClick={placeHere}
-              onPointerOver={() => { document.body.style.cursor = 'pointer' }}
-              onPointerOut={() => { document.body.style.cursor = '' }}
-            >
-              <boxGeometry args={[candidate.bounds.halfSize[0] * 2 + 0.04, 0.022, candidate.bounds.halfSize[2] * 2 + 0.04]} />
-              <meshStandardMaterial color={color} transparent opacity={0.2} depthWrite={false} />
-              <Edges color={color} />
-            </mesh>
-            <Html
-              position={[candidate.bounds.center[0], su7ConceptPack.cargoVolume.floorY + 0.08, candidate.bounds.center[2]]}
-              center
-              style={{ pointerEvents: 'none' }}
-            >
-              <span className="cargo-target-label">点击放在{label}</span>
-            </Html>
-          </group>
-        )
-      })}
-    </>
-  )
-}
-
-function CargoGhost({ entry, position, rotationX, rotationY }: {
-  entry: PropCatalogEntry
-  position: readonly [number, number, number]
-  rotationX: number
-  rotationY: number
-}) {
-  const gltf = useGLTF(entry.modelPath)
-  const [height, width, depth] = entry.dimensionsM
-  const ghost = useMemo(() => {
-    const scene = SkeletonUtils.clone(gltf.scene)
-    scene.traverse((object) => {
-      if (!(object instanceof Mesh)) return
-      const makePlacementMaterial = () => new MeshBasicMaterial({
-        color: '#36b8ff',
-        transparent: true,
-        opacity: 0.34,
-        wireframe: false,
-        depthWrite: false,
-        toneMapped: false,
-      })
-      object.material = Array.isArray(object.material)
-        ? object.material.map(makePlacementMaterial)
-        : makePlacementMaterial()
-    })
-    const bounds = new Box3().setFromObject(scene)
-    const size = bounds.getSize(new Vector3())
-    const center = bounds.getCenter(new Vector3())
-    return {
-      scene,
-      scale: [width / size.x, height / size.y, depth / size.z] as const,
-      offset: [-center.x, -bounds.min.y, -center.z] as const,
+function CargoVolumeVisualizer({ invalid }: { invalid: boolean }) {
+  const geometry = useMemo(() => {
+    const sections = su7ConceptPack.cargoVolume.collider.sections
+    const vertices: number[] = []
+    const indices: number[] = []
+    const ringSize = sections[0].polygon.length
+    for (const section of sections) {
+      for (const [x, z] of section.polygon) vertices.push(x, section.y, z)
     }
-  }, [depth, gltf.scene, height, width])
-
+    for (let ring = 0; ring < sections.length - 1; ring += 1) {
+      for (let index = 0; index < ringSize; index += 1) {
+        const next = (index + 1) % ringSize
+        const lower = ring * ringSize + index
+        const lowerNext = ring * ringSize + next
+        const upper = (ring + 1) * ringSize + index
+        const upperNext = (ring + 1) * ringSize + next
+        indices.push(lower, lowerNext, upperNext, lower, upperNext, upper)
+      }
+    }
+    const result = new BufferGeometry()
+    result.setAttribute('position', new Float32BufferAttribute(vertices, 3))
+    result.setIndex(indices)
+    result.computeVertexNormals()
+    return result
+  }, [])
+  const color = invalid ? '#ff5d66' : su7ConceptPack.cargoVolume.collider.color
   return (
-    <group position={position} rotation-y={rotationY}>
-      <group rotation-x={rotationX}>
-        <group scale={ghost.scale}>
-          <primitive object={ghost.scene} position={ghost.offset} />
-        </group>
-      </group>
-    </group>
+    <mesh geometry={geometry} renderOrder={4}>
+      <meshBasicMaterial color={color} transparent opacity={0.09} side={DoubleSide} depthWrite={false} toneMapped={false} />
+      <Edges color={color} threshold={12} />
+    </mesh>
   )
 }
 
-function CargoHoverPlacementTarget({ onFeedback }: { onFeedback: (message: string) => void }) {
-  const armedPropId = useExperienceStore((state) => state.cargoArmedPropId)
-  const cargoPlacements = useExperienceStore((state) => state.cargoPlacements)
-  const [hoveredAnchor, setHoveredAnchor] = useState<CargoAnchorId | null>(null)
-  if (!armedPropId) return null
-  const entry = propCatalog.find((candidate) => candidate.id === armedPropId)
-  if (!entry) return null
-  const existing = [...cargoPlacements.values()].filter(
-    (placement) => placement.propId !== armedPropId && placement.state !== 'returning',
-  )
-  const result = hoveredAnchor ? findCargoPlacement(armedPropId, existing, hoveredAnchor) : null
-  const candidate = result?.ok ? result.candidate : null
-  // Positive world Z appears on the left in the registered rear camera.
-  const visualLabel = hoveredAnchor === 'rear_right' ? '左侧' : '右侧'
+const reasonLabels = {
+  'outside-volume': '超出后备箱可用容积',
+  'intersects-wall': '碰到内壁或轮拱',
+  'blocked-opening': '当前姿态无法通过尾门开口',
+  occupied: '与已有箱子重叠',
+  'floor-support-required': '只能放在后备箱地板上',
+} as const
 
-  const updateSide = (event: ThreeEvent<PointerEvent>) => {
-    event.stopPropagation()
-    setHoveredAnchor(event.point.z >= 0 ? 'rear_right' : 'rear_left')
-  }
+function CargoPlacementController({ onFeedback }: { onFeedback: (message: string) => void }) {
+  const session = useExperienceStore((state) => state.cargoPlacementSession)
+  const placements = useExperienceStore((state) => state.cargoPlacements)
+  const setSession = useExperienceStore((state) => state.setCargoPlacementSession)
+  const entry = findProp(session?.catalogPropId ?? null)
+  const existing = useMemo(() => [...placements.values()].filter(
+    (placement) => placement.instanceId !== session?.instanceId && placement.state !== 'returning',
+  ), [placements, session?.instanceId])
 
-  const placeHere = (event: ThreeEvent<MouseEvent>) => {
-    event.stopPropagation()
-    event.nativeEvent.stopImmediatePropagation()
-    if (!hoveredAnchor || !candidate) return
-    const dispatched = dispatchVehicleAction({
-      type: 'cargo',
-      operation: 'place',
-      propId: armedPropId,
-      preferredAnchor: hoveredAnchor,
+  const updateAt = useCallback((x: number, z: number) => {
+    if (!session) return
+    const result = candidateAtPosition(
+      session.catalogPropId,
+      x,
+      z,
+      session.orientation,
+      session.rotationY,
+      existing,
+      session.precisionMode,
+    )
+    setSession({
+      ...session,
+      candidate: result.candidate ? {
+        instanceId: session.instanceId,
+        catalogPropId: session.catalogPropId,
+        state: 'dragging',
+        orientation: result.candidate.orientation,
+        position: result.candidate.position,
+        rotation: result.candidate.rotation,
+        occupiedBounds: result.candidate.bounds,
+        anchorId: null,
+      } : null,
+      valid: result.ok,
+      reason: result.ok ? null : result.reason,
+      snappedToInstanceId: result.ok ? result.candidate.snappedToInstanceId : null,
     })
-    onFeedback(dispatched.message)
-    setHoveredAnchor(null)
+  }, [existing, session, setSession])
+
+  useEffect(() => {
+    if (!session) return
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onFeedback(dispatchVehicleAction({ type: 'cargo', operation: 'cancel' }).message)
+      if (event.key.toLowerCase() === 'q') onFeedback(dispatchVehicleAction({ type: 'cargo', operation: 'rotate', direction: -1 }).message)
+      if (event.key.toLowerCase() === 'e') onFeedback(dispatchVehicleAction({ type: 'cargo', operation: 'rotate', direction: 1 }).message)
+      if (event.key.toLowerCase() === 'r') onFeedback(dispatchVehicleAction({ type: 'cargo', operation: 'rotate' }).message)
+      if (event.key === 'Shift') setSession({ ...useExperienceStore.getState().cargoPlacementSession!, precisionMode: true })
+    }
+    const keyup = (event: KeyboardEvent) => {
+      const current = useExperienceStore.getState().cargoPlacementSession
+      if (event.key === 'Shift' && current) setSession({ ...current, precisionMode: false })
+    }
+    const wheel = (event: WheelEvent) => {
+      event.preventDefault()
+      const direction = event.deltaY > 0 ? 1 : -1
+      onFeedback(dispatchVehicleAction({ type: 'cargo', operation: 'rotate', direction, degrees: 5 }).message)
+    }
+    const contextmenu = (event: MouseEvent) => {
+      event.preventDefault()
+    }
+    window.addEventListener('keydown', keydown)
+    window.addEventListener('keyup', keyup)
+    window.addEventListener('wheel', wheel, { passive: false })
+    window.addEventListener('contextmenu', contextmenu)
+    return () => {
+      window.removeEventListener('keydown', keydown)
+      window.removeEventListener('keyup', keyup)
+      window.removeEventListener('wheel', wheel)
+      window.removeEventListener('contextmenu', contextmenu)
+    }
+  }, [onFeedback, session, setSession, updateAt])
+
+  if (!session || !entry) return null
+  const pointerMove = (event: ThreeEvent<PointerEvent>) => {
+    event.stopPropagation()
+    updateAt(event.point.x, event.point.z)
+  }
+  const confirm = (event: ThreeEvent<MouseEvent>) => {
+    event.stopPropagation()
+    onFeedback(dispatchVehicleAction({ type: 'cargo', operation: 'confirm' }).message)
   }
 
   return (
     <group>
+      <CargoVolumeVisualizer invalid={!session.valid} />
       <mesh
-        position={[1.56, su7ConceptPack.cargoVolume.floorY + 0.34, 0]}
-        onPointerMove={updateSide}
-        onPointerOver={(event) => {
-          updateSide(event)
-          document.body.style.cursor = 'pointer'
-        }}
-        onPointerOut={() => {
-          setHoveredAnchor(null)
-          document.body.style.cursor = ''
-        }}
-        onClick={placeHere}
+        position={[1.95, su7ConceptPack.cargoVolume.floorY + 0.006, 0]}
+        rotation-x={-Math.PI / 2}
+        onPointerMove={pointerMove}
+        onClick={confirm}
       >
-        <boxGeometry args={[0.92, 0.68, 1.12]} />
+        <planeGeometry args={[1.3, 1.35]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
-      {candidate && (
+      {session.candidate && (
         <>
-          <CargoGhost
-            entry={entry}
-            position={candidate.position}
-            rotationX={candidate.rotation[0]}
-            rotationY={candidate.rotation[1]}
-          />
-          <Html
-            position={[candidate.bounds.center[0], su7ConceptPack.cargoVolume.floorY + 0.24, candidate.bounds.center[2]]}
-            center
-            style={{ pointerEvents: 'none' }}
-          >
-            <span className="cargo-target-label">点击放在{visualLabel}</span>
+          <Suspense fallback={null}>
+            <CargoGhost entry={entry} placement={session.candidate} valid={session.valid} />
+          </Suspense>
+          <Html position={[session.candidate.position[0], session.candidate.position[1] + session.candidate.occupiedBounds.halfSize[1] + 0.12, session.candidate.position[2]]} center>
+            <div className={`cargo-placement-hint${session.valid ? ' valid' : ' invalid'}`}>
+              <strong>{session.valid ? (session.snappedToInstanceId ? '已吸附 · 单击放置' : '单击放置') : reasonLabels[session.reason ?? 'outside-volume']}</strong>
+              <span>滚轮/QE 旋转 · R 换姿态 · 右键拖动镜头 · Esc 取消</span>
+            </div>
           </Html>
         </>
       )}
@@ -233,51 +194,41 @@ function CargoHoverPlacementTarget({ onFeedback }: { onFeedback: (message: strin
 }
 
 export function Experience({
-  selectedProp,
-  showPropReferenceBox,
   onPropLoadError,
   onCargoFeedback,
 }: {
-  selectedProp: PropCatalogEntry | null
-  showPropReferenceBox: boolean
   onPropLoadError: (assetId: string) => void
   onCargoFeedback: (message: string) => void
 }) {
   const stageMode = useExperienceStore((state) => state.stageMode)
   const cargoPlacements = useExperienceStore((state) => state.cargoPlacements)
+  const selectedInstanceId = useExperienceStore((state) => state.selectedCargoInstanceId)
+  const sessionInstanceId = useExperienceStore((state) => state.cargoPlacementSession?.instanceId)
 
   return (
     <>
       <color attach="background" args={['#090b0e']} />
       <fog attach="fog" args={['#090b0e', 10, 22]} />
       <ambientLight intensity={0.82} />
-      <directionalLight
-        castShadow
-        position={[4, 8, 6]}
-        intensity={2.35}
-        color="#fff8e8"
-        shadow-mapSize={[1024, 1024]}
-      />
+      <directionalLight castShadow position={[4, 8, 6]} intensity={2.35} color="#fff8e8" shadow-mapSize={[1024, 1024]} />
       <directionalLight position={[-5, 3, -4]} intensity={1.35} color="#91b9ff" />
       <spotLight position={[0, 6, -5]} intensity={3.2} angle={0.55} penumbra={0.8} color="#ffd15c" />
-      <Suspense fallback={null}>
-        <VehicleModel />
-      </Suspense>
-      {stageMode === 'studio' && propCatalog
-        .filter((entry) => entry.id === selectedProp?.id || cargoPlacements.has(entry.id))
-        .map((entry) => (
-          <PropDisplayBoundary key={entry.id} assetId={entry.id} onError={onPropLoadError}>
-            <Suspense fallback={null}>
-              <PropDisplay
-                entry={entry}
-                selected={entry.id === selectedProp?.id}
-                showPropReferenceBox={showPropReferenceBox}
-                onFeedback={onCargoFeedback}
-              />
-            </Suspense>
-          </PropDisplayBoundary>
-        ))}
-      {stageMode === 'studio' && <CargoHoverPlacementTarget onFeedback={onCargoFeedback} />}
+      <pointLight position={[1.45, 1.65, 0]} intensity={1.8} distance={2.6} decay={1.8} color="#e8fff9" />
+      <Suspense fallback={null}><VehicleModel /></Suspense>
+      {stageMode === 'studio' && [...cargoPlacements.values()]
+        .filter((placement) => placement.instanceId !== sessionInstanceId)
+        .map((placement) => {
+          const entry = findProp(placement.catalogPropId)
+          if (!entry) return null
+          return (
+            <PropDisplayBoundary key={placement.instanceId} assetId={placement.catalogPropId} onError={onPropLoadError}>
+              <Suspense fallback={null}>
+                <PropDisplay entry={entry} placement={placement} selected={selectedInstanceId === placement.instanceId} onFeedback={onCargoFeedback} />
+              </Suspense>
+            </PropDisplayBoundary>
+          )
+        })}
+      {stageMode === 'studio' && <CargoPlacementController onFeedback={onCargoFeedback} />}
       <ContactShadows position={[0, -0.015, 0]} opacity={0.72} scale={12} blur={2.6} far={5} frames={3} />
       {stageMode === 'launch' ? <LaunchStage /> : (
         <mesh rotation-x={-Math.PI / 2} position-y={-0.03} receiveShadow>

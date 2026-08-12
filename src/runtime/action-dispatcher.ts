@@ -12,6 +12,8 @@ import { useExperienceStore } from '../store/experience-store'
 import type {
   ActiveVehicleAction,
   CargoAction,
+  CargoInstanceId,
+  CargoOrientation,
   CargoPlacement,
   DoorTarget,
   HatchTarget,
@@ -19,29 +21,35 @@ import type {
   WindowTarget,
 } from '../types'
 import { findProp, type PropId } from '../props/prop-catalog'
-import { boundsForProp, findCargoPlacement, placementFromLayout } from './cargo-layout'
+import { candidateAtPosition, findCargoPlacement, type CargoPlacementCandidate } from './cargo-layout'
 
 export type DispatchResult =
   | { ok: true; message: string; actionId?: string }
   | { ok: false; message: string }
 
 let nextActionId = 1
+let nextCargoInstanceId = 1
 type VehicleRuntimeAction = Exclude<VehicleAction, { type: 'orbit' } | { type: 'cargo' }>
 
 const cargoReasonLabels = {
-  'too-large-for-opening': '物品无法通过当前后备箱入口',
-  'outside-cargo-volume': '物品会超出后备箱可用空间',
-  occupied: '当前位置与已装入物品冲突',
+  'outside-volume': '物品会超出后备箱真实可用空间',
+  'intersects-wall': '物品与后备箱内壁或轮拱发生碰撞',
+  'blocked-opening': '当前姿态无法通过后备箱入口',
+  occupied: '当前位置与已放置物品重叠',
+  'floor-support-required': '本版本仅支持放置在后备箱地板上',
 } as const
 
 function loadingPlacement(
+  instanceId: CargoInstanceId,
   propId: PropId,
-  candidate: NonNullable<ReturnType<typeof placementFromLayout>>,
+  candidate: CargoPlacementCandidate,
   transitionFrom?: readonly [number, number, number],
 ): CargoPlacement {
   return {
-    propId,
+    instanceId,
+    catalogPropId: propId,
     state: 'loading',
+    orientation: candidate.orientation,
     position: candidate.position,
     rotation: candidate.rotation,
     occupiedBounds: candidate.bounds,
@@ -50,81 +58,154 @@ function loadingPlacement(
   }
 }
 
+function createCargoInstanceId(propId: PropId) {
+  return `${propId}-${nextCargoInstanceId++}`
+}
+
+function placementReasonMessage(reason: keyof typeof cargoReasonLabels | null) {
+  return reason ? cargoReasonLabels[reason] : '请将箱子移动到后备箱地板内'
+}
+
 function dispatchCargoAction(action: CargoAction): DispatchResult {
   const state = useExperienceStore.getState()
   if (action.operation === 'demonstrate') {
     const propIds: PropId[] = ['checked_24', 'carry_on_20']
-    const placements = propIds.map((propId) => {
-      const candidate = placementFromLayout(propId, action.combinationId)
-      return candidate ? loadingPlacement(propId, candidate) : null
-    })
-    if (placements.some((placement) => !placement)) return { ok: false, message: '组合装载布局不完整' }
-    state.setCargoPlacements(placements as CargoPlacement[])
-    state.setCargoArmedProp(null)
-    state.setCargoReflowProposal(null)
+    const placements: CargoPlacement[] = []
+    for (const propId of propIds) {
+      const candidate = findCargoPlacement(propId, placements, propId === 'checked_24' ? 'rear_left' : 'rear_right', 'flat')
+      if (!candidate.ok) return { ok: false, message: '真实空间内无法生成双箱并排布局' }
+      placements.push(loadingPlacement(createCargoInstanceId(propId), propId, candidate.candidate))
+    }
+    state.setCargoPlacements(placements)
+    state.setCargoPlacementSession(null)
+    state.setSelectedCargoInstance(null)
     dispatchVehicleAction({ type: 'trunk', open: true })
     state.requestOrbit('cargo_rear')
-    return { ok: true, message: '正在演示 20 寸 + 24 寸行李箱组合装载' }
+    return { ok: true, message: '正在按真实后备箱边界演示双箱并排装载' }
   }
 
   if (action.operation === 'clear') {
     for (const placement of state.cargoPlacements.values()) {
-      const entry = findProp(placement.propId)
+      const entry = findProp(placement.catalogPropId)
       if (!entry) continue
+      const stageCenter = [entry.stagePosition[0], entry.stagePosition[1] + entry.dimensionsM[0] / 2, entry.stagePosition[2]] as const
       state.setCargoPlacement({
         ...placement,
         state: 'returning',
         transitionFrom: placement.position,
-        position: entry.stagePosition,
+        position: stageCenter,
         rotation: entry.stageRotation,
-        occupiedBounds: boundsForProp(entry, entry.stagePosition, entry.stageRotation[1]),
         anchorId: null,
       })
     }
-    state.setCargoReflowProposal(null)
-    state.setCargoArmedProp(null)
+    state.setCargoPlacementSession(null)
+    state.setSelectedCargoInstance(null)
     return { ok: true, message: '正在收回全部行李道具' }
   }
 
-  const current = state.cargoPlacements.get(action.propId)
+  if (action.operation === 'spawn') {
+    if (state.cargoPlacements.size >= su7ConceptPack.cargoVolume.collider.maxInstances) {
+      return { ok: false, message: `场景最多放置 ${su7ConceptPack.cargoVolume.collider.maxInstances} 个道具` }
+    }
+    const instanceId = createCargoInstanceId(action.propId)
+    const existing = [...state.cargoPlacements.values()].filter((placement) => placement.state !== 'returning')
+    const initial = findCargoPlacement(action.propId, existing, undefined, 'flat')
+    state.setCargoPlacementSession({
+      instanceId,
+      catalogPropId: action.propId,
+      orientation: 'flat',
+      rotationY: Math.PI / 2,
+      candidate: initial.ok ? loadingPlacement(instanceId, action.propId, initial.candidate) : null,
+      valid: initial.ok,
+      reason: initial.ok ? null : initial.reason,
+      snappedToInstanceId: initial.ok ? initial.candidate.snappedToInstanceId : null,
+      precisionMode: false,
+      originalPlacement: null,
+    })
+    state.setSelectedCargoInstance(null)
+    dispatchVehicleAction({ type: 'trunk', open: true })
+    state.requestOrbit('cargo_rear')
+    return { ok: true, message: '移动鼠标放置；滚轮或 Q/E 旋转，R 切换姿态，单击确认' }
+  }
+
+  if (action.operation === 'confirm') {
+    const session = state.cargoPlacementSession
+    if (!session?.candidate || !session.valid) return { ok: false, message: placementReasonMessage(session?.reason ?? null) }
+    const entry = findProp(session.catalogPropId)
+    const transitionFrom = session.originalPlacement?.position
+      ?? (entry ? [entry.stagePosition[0], entry.stagePosition[1] + entry.dimensionsM[0] / 2, entry.stagePosition[2]] as const : session.candidate.position)
+    state.setCargoPlacement({ ...session.candidate, state: 'loading', transitionFrom })
+    state.setCargoPlacementSession(null)
+    state.setSelectedCargoInstance(session.instanceId)
+    return { ok: true, message: `${entry?.name ?? '行李箱'}已放入后备箱` }
+  }
+
+  if (action.operation === 'cancel') {
+    state.setCargoPlacementSession(null)
+    return { ok: true, message: '已取消本次放置，原有布局未改变' }
+  }
+
   if (action.operation === 'remove') {
+    const current = state.cargoPlacements.get(action.instanceId)
     if (!current) return { ok: true, message: '该行李箱尚未装入后备箱' }
     if (current.state === 'loading' || current.state === 'returning') return { ok: false, message: '行李箱正在移动，请稍候' }
-    const entry = findProp(action.propId)
+    const entry = findProp(current.catalogPropId)
     if (!entry) return { ok: false, message: '未注册的行李道具' }
+    const stageCenter = [entry.stagePosition[0], entry.stagePosition[1] + entry.dimensionsM[0] / 2, entry.stagePosition[2]] as const
     state.setCargoPlacement({
       ...current,
       state: 'returning',
       transitionFrom: current.position,
-      position: entry.stagePosition,
+      position: stageCenter,
       rotation: entry.stageRotation,
-      occupiedBounds: boundsForProp(entry, entry.stagePosition, entry.stageRotation[1]),
       anchorId: null,
     })
-    state.setCargoArmedProp(null)
+    state.setSelectedCargoInstance(null)
     return { ok: true, message: `正在取出${entry.name}` }
   }
 
-  if (current?.state === 'loaded' || current?.state === 'loading') {
-    return { ok: true, message: '该行李箱已经位于后备箱中' }
+  if (action.operation === 'move') {
+    const current = state.cargoPlacements.get(action.instanceId)
+    if (!current || current.state !== 'loaded') return { ok: false, message: '当前道具暂时不能移动' }
+    state.setCargoPlacementSession({
+      instanceId: current.instanceId,
+      catalogPropId: current.catalogPropId,
+      orientation: current.orientation,
+      rotationY: current.rotation[1],
+      candidate: current,
+      valid: true,
+      reason: null,
+      snappedToInstanceId: null,
+      precisionMode: false,
+      originalPlacement: current,
+    })
+    state.setSelectedCargoInstance(null)
+    return { ok: true, message: '正在重新放置；右键或 Esc 可恢复原位置' }
   }
-  const existing = [...state.cargoPlacements.values()].filter(
-    (placement) => placement.propId !== action.propId && placement.state !== 'returning',
-  )
-  const result = findCargoPlacement(action.propId, existing, action.preferredAnchor)
-  if (!result.ok) {
-    const otherPropLoaded = existing.some((placement) => placement.propId !== action.propId)
-    if (otherPropLoaded) {
-      state.setCargoReflowProposal({ propId: action.propId, layoutId: 'two_suitcases' })
-      return { ok: false, message: `${cargoReasonLabels[result.reason]}；可确认自动整理后放入` }
-    }
-    return { ok: false, message: cargoReasonLabels[result.reason] }
+
+  if (action.operation === 'rotate') {
+    const session = state.cargoPlacementSession
+    if (!session) return { ok: false, message: '请先添加或移动一个道具' }
+    const orientationOrder: CargoOrientation[] = ['flat', 'side', 'upright']
+    const rotationY = session.rotationY + (action.direction ?? 0) * Math.PI * (action.degrees ?? 15) / 180
+    const nextOrientation = action.orientation
+      ?? (action.direction ? session.orientation : orientationOrder[(orientationOrder.indexOf(session.orientation) + 1) % orientationOrder.length])
+    const existing = [...state.cargoPlacements.values()].filter((placement) => placement.instanceId !== session.instanceId && placement.state !== 'returning')
+    const center = session.candidate?.position ?? [2, su7ConceptPack.cargoVolume.floorY, 0]
+    const result = candidateAtPosition(session.catalogPropId, center[0], center[2], nextOrientation, rotationY, existing, session.precisionMode)
+    state.setCargoPlacementSession({
+      ...session,
+      orientation: nextOrientation,
+      rotationY,
+      candidate: result.candidate ? loadingPlacement(session.instanceId, session.catalogPropId, result.candidate) : null,
+      valid: result.ok,
+      reason: result.ok ? null : result.reason,
+      snappedToInstanceId: result.ok ? result.candidate.snappedToInstanceId : null,
+    })
+    return { ok: true, message: result.ok ? '姿态已更新' : placementReasonMessage(result.reason) }
   }
-  state.setCargoPlacement(loadingPlacement(action.propId, result.candidate, current?.position))
-  state.setCargoArmedProp(null)
-  state.setCargoReflowProposal(null)
-  dispatchVehicleAction({ type: 'trunk', open: true })
-  return { ok: true, message: `已找到合法位置，正在辅助装入${findProp(action.propId)?.name ?? '行李箱'}` }
+
+  return { ok: false, message: '不支持的道具操作' }
 }
 
 /**

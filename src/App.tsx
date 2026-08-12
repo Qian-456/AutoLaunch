@@ -11,7 +11,7 @@ import { createBrowserSpeechRecognition, type BrowserSpeechRecognition } from '.
 import { useExperienceStore } from './store/experience-store'
 import { buildSiteTitle } from './runtime/site-title'
 import type { OrbitPreset, VehicleAction, WindowTarget } from './types'
-import { findProp, propCatalog, toggleSelectedProp, type PropId } from './props/prop-catalog'
+import { propCatalog, type PropId } from './props/prop-catalog'
 
 const orbitButtons: Array<{ preset: OrbitPreset; label: string }> = [
   { preset: 'hero_front_left', label: '主视觉' },
@@ -69,8 +69,6 @@ export function App() {
   const [isCommandDrawerOpen, setIsCommandDrawerOpen] = useState(false)
   const [isControlPanelOpen, setIsControlPanelOpen] = useState(false)
   const [isPropWarehouseOpen, setIsPropWarehouseOpen] = useState(false)
-  const [selectedPropId, setSelectedPropId] = useState<PropId | null>(null)
-  const [showPropReferenceBox, setShowPropReferenceBox] = useState(false)
   const [propLoadError, setPropLoadError] = useState<PropId | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [launchCountdown, setLaunchCountdown] = useState<number | null>(null)
@@ -105,10 +103,9 @@ export function App() {
   const headlightOn = useExperienceStore((state) => state.lightStates.get('headlight'))
   const taillightOn = useExperienceStore((state) => state.lightStates.get('taillight'))
   const cargoPlacements = useExperienceStore((state) => state.cargoPlacements)
-  const cargoReflowProposal = useExperienceStore((state) => state.cargoReflowProposal)
+  const cargoPlacementSession = useExperienceStore((state) => state.cargoPlacementSession)
   const setVoiceState = useExperienceStore((state) => state.setVoiceState)
   const setStageMode = useExperienceStore((state) => state.setStageMode)
-  const selectedProp = findProp(selectedPropId)
 
   const handlePropLoadError = useCallback((assetId: string) => {
     if (assetId !== 'carry_on_20' && assetId !== 'checked_24') return
@@ -116,16 +113,11 @@ export function App() {
     setFeedback('道具加载失败，车辆展示与控制不受影响')
   }, [])
 
-  const toggleProp = useCallback((id: PropId) => {
+  const addProp = useCallback((id: PropId) => {
     setPropLoadError(null)
-    setSelectedPropId((current) => {
-      const next = toggleSelectedProp(current, id)
-      if (next) {
-        dispatchVehicleAction({ type: 'trunk', open: true })
-        setFeedback('行李箱已放在车尾装载垫上；点击箱体选中，再点击后备箱左侧或右侧')
-      }
-      return next
-    })
+    if (useExperienceStore.getState().stageMode === 'launch') useExperienceStore.getState().setStageMode('studio')
+    const result = dispatchVehicleAction({ type: 'cargo', operation: 'spawn', propId: id })
+    setFeedback(result.message)
   }, [])
 
   const runOrbit = useCallback((preset: OrbitPreset) => {
@@ -148,6 +140,14 @@ export function App() {
     if (useExperienceStore.getState().stageMode === 'launch') useExperienceStore.getState().setStageMode('studio')
     const result = dispatchVehicleAction(action)
     setFeedback(result.message)
+  }, [])
+
+  const closePropWarehouse = useCallback(() => {
+    if (useExperienceStore.getState().cargoPlacementSession) {
+      const cancelled = dispatchVehicleAction({ type: 'cargo', operation: 'cancel' })
+      setFeedback(cancelled.message)
+    }
+    setIsPropWarehouseOpen(false)
   }, [])
 
   const runCommandText = useCallback((text: string, clearAfter = false) => {
@@ -339,8 +339,6 @@ export function App() {
             }}
           >
             <Experience
-              selectedProp={selectedProp}
-              showPropReferenceBox={showPropReferenceBox}
               onPropLoadError={handlePropLoadError}
               onCargoFeedback={setFeedback}
             />
@@ -517,12 +515,17 @@ export function App() {
             aria-expanded={isPropWarehouseOpen}
             aria-controls="prop-warehouse-panel"
             onClick={() => {
-              setIsPropWarehouseOpen((open) => !open)
+              if (isPropWarehouseOpen) {
+                closePropWarehouse()
+              } else {
+                setIsPropWarehouseOpen(true)
+                runOrbit('cargo_rear')
+              }
               setIsControlPanelOpen(false)
             }}
           >
             道具仓库
-            {selectedProp && <span aria-label={`当前展示：${selectedProp.name}`} />}
+            {(cargoPlacementSession || cargoPlacements.size > 0) && <span aria-label={`当前已放置 ${cargoPlacements.size} 件`} />}
           </button>
 
           <section
@@ -536,22 +539,9 @@ export function App() {
                 <span>PROP LIBRARY</span>
                 <h2>行李道具</h2>
               </div>
-              {(selectedProp || cargoPlacements.size > 0) && <button type="button" onClick={() => {
-                runCargoAction({ type: 'cargo', operation: 'clear' })
-                setSelectedPropId(null)
-              }}>全部收回</button>}
+              <button className="prop-warehouse__close" type="button" onClick={closePropWarehouse} aria-label="收起道具仓库">× 收起</button>
             </div>
-            <p>选择道具后点击车尾箱体使其虚化，再点击后备箱内的左侧或右侧落位区。</p>
-            <button
-              className={`prop-warehouse__comparison${showPropReferenceBox ? ' active' : ''}`}
-              type="button"
-              aria-pressed={showPropReferenceBox}
-              disabled={!selectedProp}
-              onClick={() => setShowPropReferenceBox((visible) => !visible)}
-            >
-              <span>尺寸对照</span>
-              <small>{showPropReferenceBox ? 'ON · 显示真实米制外廓' : 'OFF · 显示等尺寸参照盒'}</small>
-            </button>
+            <p className="prop-warehouse__summary">{cargoPlacements.size} / {su7ConceptPack.cargoVolume.collider.maxInstances} 件 · 点击添加后直接在后备箱内放置</p>
             <button
               className="prop-warehouse__demo"
               type="button"
@@ -559,41 +549,27 @@ export function App() {
             >
               演示 20 寸 + 24 寸组合装载
             </button>
-            {cargoReflowProposal && (
-              <div className="cargo-reflow" role="status">
-                <span>当前摆法需要重新整理已有行李箱，系统不会自动挤开物品。</span>
-                <button type="button" onClick={() => runCargoAction({ type: 'cargo', operation: 'demonstrate', combinationId: cargoReflowProposal.layoutId })}>确认整理并放入</button>
-                <button type="button" onClick={() => useExperienceStore.getState().setCargoReflowProposal(null)}>取消</button>
-              </div>
-            )}
             <div className="prop-warehouse__grid">
               {propCatalog.map((entry) => {
-                const active = selectedPropId === entry.id
                 const failed = propLoadError === entry.id
-                const cargoPlacement = cargoPlacements.get(entry.id)
+                const count = [...cargoPlacements.values()].filter((placement) => placement.catalogPropId === entry.id && placement.state !== 'returning').length
                 const [height, width, depth] = entry.dimensionsM.map((value) => {
                   const centimetres = value * 100
                   return Number.isInteger(centimetres) ? String(centimetres) : centimetres.toFixed(1)
                 })
                 return (
-                  <article className={`prop-card${active ? ' active' : ''}${failed ? ' failed' : ''}`} key={entry.id}>
+                  <article className={`prop-card${failed ? ' failed' : ''}`} key={entry.id}>
                     <div className="prop-card__swatch" style={{ '--prop-color': entry.previewColor } as CSSProperties}>
                       <span aria-hidden="true" />
                     </div>
                     <div className="prop-card__copy">
                       <strong>{entry.name}</strong>
-                      <span>{entry.description}</span>
                       <small>{height} × {width} × {depth} cm</small>
+                      <span>场景内 {count} 件</span>
                     </div>
                     <div className="prop-card__actions">
-                      <button type="button" onClick={() => toggleProp(entry.id)}>
-                        {active ? '取消选择' : failed ? '重试' : '选择'}
-                      </button>
-                      <button type="button" onClick={() => runCargoAction(cargoPlacement
-                        ? { type: 'cargo', operation: 'remove', propId: entry.id }
-                        : { type: 'cargo', operation: 'place', propId: entry.id }
-                      )}>
-                        {cargoPlacement ? '取出' : '装入'}
+                      <button type="button" disabled={cargoPlacements.size >= su7ConceptPack.cargoVolume.collider.maxInstances} onClick={() => addProp(entry.id)}>
+                        {failed ? '重试' : '＋ 添加'}
                       </button>
                     </div>
                   </article>
@@ -606,13 +582,15 @@ export function App() {
                 <span>示意布局，非官方测量结果</span>
               </div>
             )}
-            <div className="prop-warehouse__attribution">
-              <span>当前资产</span>
-              <strong>{selectedProp?.attribution.author ?? 'AutoLaunch Contributors'}</strong>
-              <a href={selectedProp?.attribution.licenseUrl ?? 'https://creativecommons.org/licenses/by-nc-sa/4.0/'} target="_blank" rel="noreferrer">
-                {selectedProp?.attribution.license ?? 'CC BY-NC-SA 4.0'} · 原创无品牌道具 · 禁止商用
-              </a>
-            </div>
+            {cargoPlacements.size > 0 && (
+              <button className="prop-warehouse__clear" type="button" onClick={() => runCargoAction({ type: 'cargo', operation: 'clear' })}>
+                ↩ 收回场景内全部道具
+              </button>
+            )}
+            <details className="prop-warehouse__details">
+              <summary>尺寸、操作与素材许可</summary>
+              <p>滚轮或 Q/E 旋转 · R 切换姿态 · 右键拖动镜头 · Shift 关闭磁吸 · Esc 取消。道具由 AutoLaunch Contributors 原创，CC BY-NC-SA 4.0。</p>
+            </details>
           </section>
 
           <nav className="camera-switcher" aria-label="镜头控制">
