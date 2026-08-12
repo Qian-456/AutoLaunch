@@ -1,7 +1,7 @@
 import { Component, Suspense, useCallback, useEffect, useMemo, useRef, type ErrorInfo, type ReactNode } from 'react'
 import { ContactShadows, Edges, Html } from '@react-three/drei'
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
-import { BufferGeometry, DoubleSide, Float32BufferAttribute, MathUtils, PointLight, SpotLight } from 'three'
+import { BufferGeometry, DoubleSide, Float32BufferAttribute, MathUtils, Object3D, PointLight, SpotLight } from 'three'
 import { VehicleModel } from './VehicleModel'
 import { OrbitCameraRig } from './OrbitCameraRig'
 import { useExperienceStore } from '../store/experience-store'
@@ -89,6 +89,7 @@ const reasonLabels = {
 function CargoInteriorLights() {
   const point = useRef<PointLight>(null)
   const fill = useRef<SpotLight>(null)
+  const fillTarget = useRef<Object3D>(null)
   const trunkOpen = useExperienceStore((state) => state.vehiclePartStates.get('trunk') === 'open')
   const activeOrbitPreset = useExperienceStore((state) => state.activeOrbitPreset)
   const cargoActive = trunkOpen || activeOrbitPreset === 'cargo_rear' || activeOrbitPreset === 'cargo_overview'
@@ -97,11 +98,13 @@ function CargoInteriorLights() {
     const targetFill = cargoActive ? 1.15 : 0
     if (point.current) point.current.intensity = MathUtils.damp(point.current.intensity, targetPoint, 7, delta)
     if (fill.current) fill.current.intensity = MathUtils.damp(fill.current.intensity, targetFill, 7, delta)
+    if (fill.current && fillTarget.current && fill.current.target !== fillTarget.current) fill.current.target = fillTarget.current
   })
   return (
     <>
       <pointLight ref={point} position={[1.72, 1.26, -0.34]} intensity={0} distance={1.35} decay={2.1} color="#ffe2b0" />
-      <spotLight ref={fill} position={[2.38, 1.38, 0]} target-position={[1.83, 0.78, 0]} intensity={0} distance={1.7} angle={0.62} penumbra={0.82} decay={2} color="#d7ebff" />
+      <object3D ref={fillTarget} position={[1.83, 0.78, 0]} />
+      <spotLight ref={fill} position={[2.38, 1.38, 0]} intensity={0} distance={1.7} angle={0.62} penumbra={0.82} decay={2} color="#d7ebff" />
     </>
   )
 }
@@ -137,7 +140,8 @@ function CargoPlacementController({ onFeedback }: { onFeedback: (message: string
         rotation: result.candidate.rotation,
         occupiedBounds: result.candidate.bounds,
         supportHeight: result.candidate.supportHeight,
-        contactOffsetY: result.candidate.contactOffsetY,
+        collisionCenter: result.candidate.collisionCenter,
+        worldGroundContacts: result.candidate.worldGroundContacts,
         anchorId: null,
       } : null,
       valid: result.ok,
@@ -222,6 +226,7 @@ export function Experience({
   const cargoPlacements = useExperienceStore((state) => state.cargoPlacements)
   const selectedInstanceId = useExperienceStore((state) => state.selectedCargoInstanceId)
   const sessionInstanceId = useExperienceStore((state) => state.cargoPlacementSession?.instanceId)
+  const cargoShadowPlacements = [...cargoPlacements.values()].filter((placement) => placement.state !== 'returning')
 
   return (
     <>
@@ -248,17 +253,17 @@ export function Experience({
           )
         })}
       {stageMode === 'studio' && <CargoPlacementController onFeedback={onCargoFeedback} />}
-      {stageMode === 'studio' && [...cargoPlacements.values()].filter((placement) => placement.state !== 'returning').map((placement) => (
-        <ContactShadows
-          key={`contact-${placement.instanceId}`}
-          position={[placement.position[0], placement.supportHeight + 0.002, placement.position[2]]}
-          opacity={0.78}
-          scale={Math.max(placement.occupiedBounds.halfSize[0], placement.occupiedBounds.halfSize[2]) * 2.35}
-          blur={1.1}
-          far={0.32}
-          resolution={256}
-          frames={8}
-        />
+      {stageMode === 'studio' && cargoShadowPlacements.map((placement) => (
+        <mesh
+          key={`cargo-shadow-${placement.instanceId}`}
+          position={[placement.position[0], placement.supportHeight + 0.001, placement.position[2]]}
+          rotation-x={-Math.PI / 2}
+          raycast={() => null}
+          renderOrder={1}
+        >
+          <circleGeometry args={[Math.max(placement.occupiedBounds.halfSize[0], placement.occupiedBounds.halfSize[2]) * 0.92, 40]} />
+          <meshBasicMaterial color="#000000" transparent opacity={0.22} depthWrite={false} polygonOffset polygonOffsetFactor={-1} />
+        </mesh>
       ))}
       <ContactShadows position={[0, -0.015, 0]} opacity={0.72} scale={12} blur={2.6} far={5} frames={3} />
       {stageMode === 'launch' ? <LaunchStage /> : (

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Html, Outlines, useGLTF } from '@react-three/drei'
 import { createPortal, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
-import { Box3, BoxGeometry, Color, Group, MathUtils, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, Vector3 } from 'three'
+import { Box3, BoxGeometry, Color, Group, Matrix3, MathUtils, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, Raycaster, Vector3 } from 'three'
 import { SkeletonUtils } from 'three/examples/jsm/Addons.js'
 import { KTX2Loader, type GLTFLoader } from 'three-stdlib'
 import {
@@ -18,6 +18,7 @@ import {
 import { useExperienceStore } from '../store/experience-store'
 import type { ActiveVehicleAction, DoorTarget, WindowTarget } from '../types'
 import { dispatchVehicleAction } from '../runtime/action-dispatcher'
+import { registerCargoSurfaceSampler } from '../runtime/cargo-surface'
 import {
   resolveVehicleTargetFromIntersections,
   type VehicleHitTarget,
@@ -484,6 +485,45 @@ export function VehicleModel() {
   const setNotice = useExperienceStore((state) => state.setNotice)
   const requestOrbit = useExperienceStore((state) => state.requestOrbit)
   const finishAction = useExperienceStore((state) => state.finishAction)
+
+  useEffect(() => {
+    const root = vehicleRoot.current
+    if (!root) return
+    root.updateWorldMatrix(true, true)
+    const raycaster = new Raycaster()
+    const down = new Vector3(0, -1, 0)
+    const origin = new Vector3()
+    const normalMatrix = new Matrix3()
+    const worldNormal = new Vector3()
+    const surfaceHeightCache = new Map<string, number | null>()
+    const movingHatchNames = new Set<string>(
+      su7ConceptPack.actions.hatch_rear.movingNodeIds
+        .map((semanticId) => su7ConceptPack.nodeMap[semanticId as keyof typeof su7ConceptPack.nodeMap])
+        .filter(Boolean),
+    )
+    registerCargoSurfaceSampler((x, z) => {
+      // Placement search revisits the same grid/contact coordinates many times.
+      // Cache them so one interaction does not repeatedly raycast the full car GLB.
+      const cacheKey = `${x.toFixed(4)}:${z.toFixed(4)}`
+      if (surfaceHeightCache.has(cacheKey)) return surfaceHeightCache.get(cacheKey) ?? null
+      root.updateWorldMatrix(true, true)
+      origin.set(x, 1.25, z)
+      raycaster.set(origin, down)
+      const hit = raycaster.intersectObject(scene, true).find((intersection) => {
+        const mesh = intersection.object
+        if (!(mesh instanceof Mesh) || movingHatchNames.has(mesh.name)) return false
+        const y = intersection.point.y
+        if (y < 0.58 || y > 0.82 || !intersection.face) return false
+        normalMatrix.getNormalMatrix(mesh.matrixWorld)
+        worldNormal.copy(intersection.face.normal).applyMatrix3(normalMatrix).normalize()
+        return worldNormal.y > 0.45
+      })
+      const height = hit?.point.y ?? null
+      surfaceHeightCache.set(cacheKey, height)
+      return height
+    })
+    return () => registerCargoSurfaceSampler(null)
+  }, [scene])
 
   const resolveClickedPart = useCallback(
     (intersections: ThreeEvent<PointerEvent>['intersections']) => resolveVehicleTargetFromIntersections(

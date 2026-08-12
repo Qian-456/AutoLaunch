@@ -57,7 +57,8 @@ function loadingPlacement(
     rotation: candidate.rotation,
     occupiedBounds: candidate.bounds,
     supportHeight: candidate.supportHeight,
-    contactOffsetY: candidate.contactOffsetY,
+    collisionCenter: candidate.collisionCenter,
+    worldGroundContacts: candidate.worldGroundContacts,
     anchorId: candidate.anchorId,
     transitionFrom,
   }
@@ -79,7 +80,11 @@ function dispatchCargoAction(action: CargoAction): DispatchResult {
     for (const propId of propIds) {
       const candidate = findCargoPlacement(propId, placements, propId === 'checked_24' ? 'rear_left' : 'rear_right', 'flat')
       if (!candidate.ok) return { ok: false, message: '真实空间内无法生成双箱并排布局' }
-      placements.push(loadingPlacement(createCargoInstanceId(propId), propId, candidate.candidate))
+      const entry = findProp(propId)
+      const transitionFrom = entry
+        ? [entry.stagePosition[0], entry.stagePosition[1] + entry.dimensionsM[0] / 2, entry.stagePosition[2]] as const
+        : undefined
+      placements.push(loadingPlacement(createCargoInstanceId(propId), propId, candidate.candidate, transitionFrom))
     }
     state.setCargoPlacements(placements)
     state.setCargoPlacementSession(null)

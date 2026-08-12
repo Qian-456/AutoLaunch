@@ -7,6 +7,7 @@ import type {
   CargoPlacement,
   CargoPlacementReason,
 } from '../types'
+import { hasCargoSurfaceSampler, sampleCargoSurface } from './cargo-surface'
 
 export type CargoPlacementCandidate = {
   position: readonly [number, number, number]
@@ -16,7 +17,8 @@ export type CargoPlacementCandidate = {
   anchorId: null
   snappedToInstanceId: CargoInstanceId | null
   supportHeight: number
-  contactOffsetY: number
+  collisionCenter: readonly [number, number, number]
+  worldGroundContacts: readonly (readonly [number, number, number])[]
 }
 
 export type CargoPlacementResult =
@@ -28,11 +30,10 @@ const EPSILON = 0.002
 
 function supportHeightAt(x: number, z: number): number | null {
   const surface = cargo.supportSurfaces.find((candidate) => pointInPolygon([x, z], candidate.polygon))
-  return surface?.height ?? null
-}
-
-function bottomSupportSamples(bounds: CargoBounds): readonly (readonly [number, number])[] {
-  return [...cornersOf(bounds), [bounds.center[0], bounds.center[2]] as const]
+  if (!surface) return null
+  const sampledHeight = sampleCargoSurface(x, z)
+  if (sampledHeight !== null) return sampledHeight
+  return hasCargoSurfaceSampler() ? null : surface.height
 }
 
 function axisAlignedObstacleIntersects(bounds: CargoBounds, obstacle: { center: readonly number[]; halfSize: readonly number[] }) {
@@ -82,6 +83,22 @@ export function transformGroundContact(
 
 export function contactOffsetForOrientation(entry: PropCatalogEntry, orientation: CargoOrientation, rotationY: number): number {
   return -Math.min(...entry.groundContacts[orientation].map((point) => transformGroundContact(point, orientation, rotationY)[1]))
+}
+
+export function solveGroundContacts(
+  entry: PropCatalogEntry,
+  x: number,
+  z: number,
+  orientation: CargoOrientation,
+  rotationY: number,
+): { modelCenterY: number; supportHeight: number; worldGroundContacts: readonly (readonly [number, number, number])[] } | null {
+  const transformed = entry.groundContacts[orientation].map((point) => transformGroundContact(point, orientation, rotationY))
+  const surfaces = transformed.map(([contactX, , contactZ]) => supportHeightAt(x + contactX, z + contactZ))
+  if (surfaces.some((height) => height === null)) return null
+  const heights = surfaces as number[]
+  const modelCenterY = Math.max(...transformed.map(([, localY], index) => heights[index] - localY))
+  const worldGroundContacts = transformed.map(([localX, localY, localZ]) => [x + localX, modelCenterY + localY, z + localZ] as const)
+  return { modelCenterY, supportHeight: Math.max(...heights), worldGroundContacts }
 }
 
 export function boundsForPose(
@@ -136,7 +153,11 @@ export function pointInPolygon(point: readonly [number, number], polygon: readon
 
 function polygonAtHeight(y: number): readonly (readonly [number, number])[] | null {
   const sections = cargo.collider.sections
-  if (y < sections[0].y - EPSILON || y > sections[sections.length - 1].y + EPSILON) return null
+  // The proxy's first ring describes the horizontal footprint, while the real
+  // GLB carpet may sit a few centimetres lower. Reuse that footprint below the
+  // authored ring instead of rejecting correctly raycast-supported cargo.
+  if (y < sections[0].y) return y >= 0.55 ? sections[0].polygon : null
+  if (y > sections[sections.length - 1].y + EPSILON) return null
   const upperIndex = sections.findIndex((section) => section.y >= y)
   if (upperIndex <= 0) return sections[0].polygon
   const lower = sections[upperIndex - 1]
@@ -184,10 +205,12 @@ export function validateCargoCandidate(
   existing: readonly CargoPlacement[],
 ): CargoPlacementResult {
   const bottom = candidate.bounds.center[1] - candidate.bounds.halfSize[1]
-  const supports = bottomSupportSamples(candidate.bounds).map(([x, z]) => supportHeightAt(x, z))
-  if (supports.some((height) => height === null)) return { ok: false, reason: 'incomplete-floor-support', candidate }
-  const supportHeights = supports as number[]
-  if (Math.max(...supportHeights) - Math.min(...supportHeights) > cargo.supportTolerance) {
+  if (!candidate.worldGroundContacts.length) return { ok: false, reason: 'incomplete-floor-support', candidate }
+  const supportHeights = candidate.worldGroundContacts.map(([x, , z]) => supportHeightAt(x, z))
+  if (supportHeights.some((height) => height === null)) return { ok: false, reason: 'incomplete-floor-support', candidate }
+  const resolvedSupports = supportHeights as number[]
+  const contactGaps = candidate.worldGroundContacts.map(([, y], index) => Math.abs(y - resolvedSupports[index]))
+  if (Math.max(...resolvedSupports) - Math.min(...resolvedSupports) > cargo.supportTolerance || contactGaps.some((gap) => gap > cargo.supportTolerance)) {
     return { ok: false, reason: 'incomplete-floor-support', candidate }
   }
   if (Math.abs(bottom - candidate.supportHeight) > EPSILON) return { ok: false, reason: 'floor-support-required', candidate }
@@ -213,11 +236,14 @@ export function validateCargoCandidate(
   if (cargo.interiorObstacles.some((obstacle) => axisAlignedObstacleIntersects(candidate.bounds, obstacle))) {
     return { ok: false, reason: 'intersects-interior', candidate }
   }
+  if (conflictsWithHatchSweep(candidate.bounds)) {
+    return { ok: false, reason: 'hatch-sweep-conflict', candidate }
+  }
   return { ok: true, candidate }
 }
 
 export function conflictsWithHatchSweep(bounds: CargoBounds): boolean {
-  return axisAlignedObstacleIntersects(bounds, cargo.hatchSweep)
+  return cargo.hatchSweepSections.some((section) => axisAlignedObstacleIntersects(bounds, section))
 }
 
 function makeCandidate(
@@ -229,21 +255,22 @@ function makeCandidate(
   snappedToInstanceId: CargoInstanceId | null = null,
 ): CargoPlacementCandidate {
   const [, height] = dimensionsForOrientation(entry, orientation)
-  const contactOffsetY = contactOffsetForOrientation(entry, orientation, rotationY)
-  const provisional = boundsForPose(entry, [x, cargo.floorY + height / 2, z], orientation, rotationY)
-  const sampled = bottomSupportSamples(provisional).map(([sampleX, sampleZ]) => supportHeightAt(sampleX, sampleZ))
-  const supportHeight = sampled.every((value) => value !== null) ? Math.max(...sampled as number[]) : cargo.floorY
-  const position = [x, supportHeight + contactOffsetY, z] as const
-  const boundsCenter = [x, supportHeight + height / 2, z] as const
+  const solved = solveGroundContacts(entry, x, z, orientation, rotationY)
+  const supportHeight = solved?.supportHeight ?? cargo.floorY
+  const position = [x, solved?.modelCenterY ?? supportHeight + contactOffsetForOrientation(entry, orientation, rotationY), z] as const
+  // The catalogue dimensions describe a conservative collision envelope. Its
+  // centre is calibrated from the support plane independently of the visual centre.
+  const collisionCenter = [x, supportHeight + height / 2, z] as const
   return {
     position,
     rotation: rotationForOrientation(orientation, rotationY),
     orientation,
-    bounds: boundsForPose(entry, boundsCenter, orientation, rotationY),
+    bounds: boundsForPose(entry, collisionCenter, orientation, rotationY),
     anchorId: null,
     snappedToInstanceId,
     supportHeight,
-    contactOffsetY,
+    collisionCenter,
+    worldGroundContacts: solved?.worldGroundContacts ?? [],
   }
 }
 

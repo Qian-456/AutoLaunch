@@ -10,6 +10,11 @@ import { dispatchVehicleAction } from '../runtime/action-dispatcher'
 
 const smoothStep = (value: number) => value * value * (3 - 2 * value)
 
+export function preloadCargoProps() {
+  useGLTF.preload('/assets/suitcase-carry-on-20.glb')
+  useGLTF.preload('/assets/suitcase-checked-24.glb')
+}
+
 export function computeCargoDragPosition(start: Vector3, lift: Vector3, sill: Vector3, end: Vector3, progress: number) {
   const t = MathUtils.clamp(progress, 0, 1)
   const inverse = 1 - t

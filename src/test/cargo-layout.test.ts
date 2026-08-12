@@ -8,11 +8,13 @@ import {
   conflictsWithHatchSweep,
   contactOffsetForOrientation,
   transformGroundContact,
+  solveGroundContacts,
 } from '../runtime/cargo-layout'
 import { dispatchVehicleAction } from '../runtime/action-dispatcher'
 import { useExperienceStore } from '../store/experience-store'
 import type { CargoPlacement } from '../types'
 import { su7ConceptPack } from '../pack/su7-concept.pack'
+import { registerCargoSurfaceSampler } from '../runtime/cargo-surface'
 
 function loaded(instanceId: string, propId: 'carry_on_20' | 'checked_24', x: number, z: number): CargoPlacement {
   const result = candidateAtPosition(propId, x, z, 'flat', Math.PI / 2, [])
@@ -26,19 +28,36 @@ function loaded(instanceId: string, propId: 'carry_on_20' | 'checked_24', x: num
     rotation: result.candidate.rotation,
     occupiedBounds: result.candidate.bounds,
     supportHeight: result.candidate.supportHeight,
-    contactOffsetY: result.candidate.contactOffsetY,
+    collisionCenter: result.candidate.collisionCenter,
+    worldGroundContacts: result.candidate.worldGroundContacts,
     anchorId: null,
   }
 }
 
 describe('real cargo volume placement', () => {
   beforeEach(() => {
+    registerCargoSurfaceSampler(null)
     useExperienceStore.setState({
       cargoPlacements: new Map(),
       cargoPlacementSession: null,
       selectedCargoInstanceId: null,
       activeActions: new Map(),
     })
+  })
+
+  it('uses the registered vehicle surface sampler when available', () => {
+    registerCargoSurfaceSampler(() => 0.692)
+    const result = candidateAtPosition('carry_on_20', 1.95, 0, 'flat', 0, [])
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.candidate.supportHeight).toBeCloseTo(0.692)
+    expect(result.candidate.worldGroundContacts.every(([, y]) => Math.abs(y - 0.692) <= 0.002)).toBe(true)
+  })
+
+  it('rejects an uneven real surface that cannot stably support the pose', () => {
+    registerCargoSurfaceSampler((_x, z) => z < 0 ? 0.69 : 0.73)
+    const result = candidateAtPosition('carry_on_20', 1.95, 0, 'flat', Math.PI / 2, [], true)
+    expect(result).toMatchObject({ ok: false, reason: 'incomplete-floor-support' })
   })
 
   it('maps stable poses to their real physical dimensions', () => {
@@ -62,7 +81,7 @@ describe('real cargo volume placement', () => {
     const entry = findProp('carry_on_20')!
     for (const orientation of ['upright', 'flat', 'side'] as const) {
       const result = candidateAtPosition(entry.id, 1.95, 0, orientation, Math.PI / 2, [])
-      if (!result.ok && result.reason === 'blocked-opening') continue
+      if (!result.ok && ['blocked-opening', 'hatch-sweep-conflict'].includes(result.reason)) continue
       expect(result.ok).toBe(true)
       if (!result.ok) continue
       expect(result.candidate.bounds.center[1] - result.candidate.bounds.halfSize[1])
@@ -94,6 +113,29 @@ describe('real cargo volume placement', () => {
     }
   })
 
+  it('samples the registered world contacts rather than collision-box corners', () => {
+    const entry = findProp('carry_on_20')!
+    for (const orientation of ['upright', 'flat', 'side'] as const) {
+      const solved = solveGroundContacts(entry, 1.95, 0, orientation, 0.37)
+      expect(solved).not.toBeNull()
+      expect(solved?.worldGroundContacts).toHaveLength(entry.groundContacts[orientation].length)
+      expect(solved?.worldGroundContacts.every(([, y]) => Math.abs(y - su7ConceptPack.cargoVolume.floorY) <= 0.002)).toBe(true)
+    }
+  })
+
+  it('keeps visual position and collision center explicit and internally aligned', () => {
+    const result = candidateAtPosition('carry_on_20', 1.95, 0, 'flat', 0, [])
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.candidate.collisionCenter).toEqual(result.candidate.bounds.center)
+    expect(result.candidate.position[1]).not.toBe(result.candidate.collisionCenter[1])
+    expect(result.candidate.worldGroundContacts.every(([, y]) => Math.abs(y - result.candidate.supportHeight) <= 0.002)).toBe(true)
+  })
+
+  it('declares a twelve-item rendering safety ceiling', () => {
+    expect(su7ConceptPack.cargoVolume.collider.maxInstances).toBe(12)
+  })
+
   it('rejects a bottom footprint that is only partially supported', () => {
     const result = candidateAtPosition('checked_24', 2.30, 0.34, 'flat', 0, [], true)
     expect(result).toMatchObject({ ok: false, reason: 'incomplete-floor-support' })
@@ -106,8 +148,14 @@ describe('real cargo volume placement', () => {
   })
 
   it('reports luggage intersecting the calibrated hatch sweep', () => {
-    const bounds = boundsForPose(findProp('carry_on_20')!, [2.25, 1.05, 0], 'upright', 0)
+    const bounds = boundsForPose(findProp('carry_on_20')!, [2.31, 1.13, 0], 'upright', 0)
     expect(conflictsWithHatchSweep(bounds)).toBe(true)
+  })
+
+  it('rejects hatch interference before placement is confirmed', () => {
+    const result = candidateAtPosition('carry_on_20', 2.27, 0, 'side', 0, [], true)
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(['hatch-sweep-conflict', 'incomplete-floor-support', 'intersects-interior']).toContain(result.reason)
   })
 
   it('rejects wheel-arch/side-wall penetration from the closed proxy volume', () => {
@@ -169,7 +217,8 @@ describe('real cargo volume placement', () => {
         rotation: overlap.candidate.rotation,
         occupiedBounds: overlap.candidate.bounds,
         supportHeight: overlap.candidate.supportHeight,
-        contactOffsetY: overlap.candidate.contactOffsetY,
+        collisionCenter: overlap.candidate.collisionCenter,
+        worldGroundContacts: overlap.candidate.worldGroundContacts,
         anchorId: null,
       } : null,
       valid: false,
@@ -185,7 +234,9 @@ describe('real cargo volume placement', () => {
     expect(result.ok).toBe(true)
     expect(placements).toHaveLength(2)
     expect(placements.every((placement) => placement.orientation === 'flat')).toBe(true)
+    expect(placements.every((placement) => placement.state === 'loading' && placement.transitionFrom)).toBe(true)
     expect(cargoBoundsIntersect(placements[0].occupiedBounds, placements[1].occupiedBounds)).toBe(false)
+    expect(placements.every((placement) => !conflictsWithHatchSweep(placement.occupiedBounds))).toBe(true)
   })
 
   it('prevents the rear hatch from closing during a cargo transition', () => {

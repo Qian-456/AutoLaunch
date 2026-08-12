@@ -141,10 +141,12 @@ export const su7ConceptPack = {
       { id: 'wheel_arch_right', center: [1.92, 0.87, 0.56], halfSize: [0.34, 0.13, 0.06] },
       { id: 'rear_sill', center: [2.39, 0.81, 0], halfSize: [0.055, 0.075, 0.43] },
     ],
-    hatchSweep: {
-      center: [2.20, 1.14, 0],
-      halfSize: [0.23, 0.20, 0.45],
-    },
+    /** Piecewise closed-hatch inner envelope; avoids the over-broad legacy box. */
+    hatchSweepSections: [
+      { id: 'hatch_lower_lip', center: [2.31, 1.115, 0], halfSize: [0.09, 0.075, 0.43] },
+      { id: 'hatch_mid_liner', center: [2.24, 1.245, 0], halfSize: [0.13, 0.085, 0.42] },
+      { id: 'hatch_upper_liner', center: [2.10, 1.37, 0], halfSize: [0.18, 0.08, 0.38] },
+    ],
     collider: {
       id: 'su7_cargo_volume_proxy_v1',
       sections: [
@@ -153,7 +155,8 @@ export const su7ConceptPack = {
         { y: 1.42, polygon: [[1.52, -0.35], [1.68, -0.35], [1.75, -0.47], [2.12, -0.47], [2.27, -0.35], [2.27, 0.35], [2.12, 0.47], [1.75, 0.47], [1.68, 0.35], [1.52, 0.35]] },
       ],
       color: '#25e6c2',
-      maxInstances: 20,
+      /** Rendering safety ceiling; physical capacity is decided by the solver. */
+      maxInstances: 12,
       snapDistance: 0.05,
       snapGap: 0.005,
     },

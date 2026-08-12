@@ -12,6 +12,7 @@ import { useExperienceStore } from './store/experience-store'
 import { buildSiteTitle } from './runtime/site-title'
 import type { OrbitPreset, VehicleAction, WindowTarget } from './types'
 import { propCatalog, type PropId } from './props/prop-catalog'
+import { preloadCargoProps } from './components/PropDisplay'
 
 const orbitButtons: Array<{ preset: OrbitPreset; label: string }> = [
   { preset: 'hero_front_left', label: '主视觉' },
@@ -81,6 +82,21 @@ export function App() {
     // but this runtime assignment guarantees a Chinese-bearing title even if the
     // static replacement is skipped (e.g. raw-static hosting, non-Vite proxy).
     document.title = buildSiteTitle()
+  }, [])
+
+  useEffect(() => {
+    // Decode the two local luggage assets while the initial vehicle view is idle,
+    // instead of blocking the first "demo combination" click with both GLBs.
+    const idleWindow = window as Window & {
+      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
+      cancelIdleCallback?: (handle: number) => void
+    }
+    if (idleWindow.requestIdleCallback) {
+      const handle = idleWindow.requestIdleCallback(preloadCargoProps, { timeout: 2500 })
+      return () => idleWindow.cancelIdleCallback?.(handle)
+    }
+    const handle = window.setTimeout(preloadCargoProps, 600)
+    return () => window.clearTimeout(handle)
   }, [])
   const modelStatus = useExperienceStore((state) => state.modelStatus)
   const stageMode = useExperienceStore((state) => state.stageMode)
@@ -541,7 +557,7 @@ export function App() {
               </div>
               <button className="prop-warehouse__close" type="button" onClick={closePropWarehouse} aria-label="收起道具仓库">× 收起</button>
             </div>
-            <p className="prop-warehouse__summary">{cargoPlacements.size} / {su7ConceptPack.cargoVolume.collider.maxInstances} 件 · 点击添加后直接在后备箱内放置</p>
+            <p className="prop-warehouse__summary">当前 {cargoPlacements.size} 件 · 场景安全上限 {su7ConceptPack.cargoVolume.collider.maxInstances} 件 · 实际容量取决于尺寸与姿态</p>
             <button
               className="prop-warehouse__demo"
               type="button"
