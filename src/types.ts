@@ -79,6 +79,7 @@ export type CargoBounds = {
 export type CargoPlacementState = 'staged' | 'dragging' | 'loading' | 'loaded' | 'returning'
 
 export type CargoPlacement = {
+  sourcePlanId?: number
   instanceId: CargoInstanceId
   catalogPropId: PropId
   state: CargoPlacementState
@@ -127,7 +128,8 @@ export type LaunchChapter = {
   camera: OrbitPreset
   actions: readonly {
     atMs: number
-    action: Exclude<VehicleAction, OrbitAction | CargoAction>
+    // Reviewed cargo combinations only; interactive spawn/move never enter a timeline.
+    action: Exclude<VehicleAction, OrbitAction | CargoAction> | Extract<CargoAction, { operation: 'demonstrate' }>
   }[]
 }
 
@@ -152,6 +154,7 @@ export type ActionTerminalStatus = 'completed' | 'cancelled' | 'failed'
 
 export type ActiveVehicleAction = {
   id: string
+  source?: 'manual' | 'script' | 'rag'
   action: Exclude<VehicleAction, OrbitAction | CargoAction>
   conflictGroup: string
   durationMs: number

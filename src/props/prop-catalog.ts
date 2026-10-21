@@ -4,6 +4,7 @@ export type PropCatalogEntry = {
   readonly id: PropId
   readonly name: string
   readonly category: 'luggage'
+  readonly capabilities: readonly ['cargo:move', 'cargo:remove']
   readonly description: string
   readonly modelPath: `/assets/${string}.glb`
   /** Physical outer dimensions in metres, ordered height × width × depth. */
@@ -39,6 +40,7 @@ export const propCatalog = [
     id: 'carry_on_20',
     name: '20 寸登机箱',
     category: 'luggage',
+    capabilities: ['cargo:move', 'cargo:remove'],
     description: '黑色阳极氧化铝 · 无拉链铝框 · 双排万向轮',
     modelPath: '/assets/suitcase-carry-on-20.glb',
     dimensionsM: [0.56, 0.37, 0.23],
@@ -59,6 +61,7 @@ export const propCatalog = [
     id: 'checked_24',
     name: '24 寸托运行李箱',
     category: 'luggage',
+    capabilities: ['cargo:move', 'cargo:remove'],
     description: '银色拉丝铝 · 无拉链铝框 · 双排万向轮',
     modelPath: '/assets/suitcase-checked-24.glb',
     dimensionsM: [0.665, 0.433, 0.275],

@@ -72,7 +72,7 @@ function placementReasonMessage(reason: keyof typeof cargoReasonLabels | null) {
   return reason ? cargoReasonLabels[reason] : '请将箱子移动到后备箱地板内'
 }
 
-function dispatchCargoAction(action: CargoAction): DispatchResult {
+function dispatchCargoAction(action: CargoAction, source: 'manual' | 'script' | 'rag'): DispatchResult {
   const state = useExperienceStore.getState()
   if (action.operation === 'demonstrate') {
     const propIds: PropId[] = ['checked_24', 'carry_on_20']
@@ -89,7 +89,7 @@ function dispatchCargoAction(action: CargoAction): DispatchResult {
     state.setCargoPlacements(placements)
     state.setCargoPlacementSession(null)
     state.setSelectedCargoInstance(null)
-    dispatchVehicleAction({ type: 'trunk', open: true })
+    dispatchVehicleAction({ type: 'trunk', open: true }, source)
     state.requestOrbit('cargo_rear')
     return { ok: true, message: '正在按真实后备箱边界演示双箱并排装载' }
   }
@@ -133,7 +133,7 @@ function dispatchCargoAction(action: CargoAction): DispatchResult {
       originalPlacement: null,
     })
     state.setSelectedCargoInstance(null)
-    dispatchVehicleAction({ type: 'trunk', open: true })
+    dispatchVehicleAction({ type: 'trunk', open: true }, source)
     state.requestOrbit('cargo_rear')
     return { ok: true, message: '移动鼠标放置；滚轮或 Q/E 旋转，R 切换姿态，单击确认' }
   }
@@ -389,8 +389,26 @@ function dispatchSingle(action: VehicleRuntimeAction): DispatchResult {
   return { ok: true, message: `${labelOf(action)}：动作已开始`, actionId: execution.id }
 }
 
-export function dispatchVehicleAction(action: VehicleAction): DispatchResult {
-  if (action.type === 'cargo') return dispatchCargoAction(action)
+export function dispatchVehicleAction(action: VehicleAction, source: 'manual' | 'script' | 'rag' = 'manual'): DispatchResult {
+  const state = useExperienceStore.getState()
+  if (source !== 'script') state.interruptPlayback()
+  const existing = new Set(useExperienceStore.getState().activeActions.keys())
+  const result = dispatchCore(action, source)
+  if (source === 'script' && action.type === 'cargo' && action.operation === 'demonstrate' && result.ok) {
+    const current = useExperienceStore.getState()
+    for (const placement of current.cargoPlacements.values()) current.setCargoPlacement({ ...placement, sourcePlanId: current.planId })
+  }
+  const activeActions = new Map(useExperienceStore.getState().activeActions)
+  let changed = false
+  for (const [id, execution] of activeActions) {
+    if (!existing.has(id)) { activeActions.set(id, { ...execution, source }); changed = true }
+  }
+  if (changed) useExperienceStore.setState({ activeActions })
+  return result
+}
+
+function dispatchCore(action: VehicleAction, source: 'manual' | 'script' | 'rag'): DispatchResult {
+  if (action.type === 'cargo') return dispatchCargoAction(action, source)
   if (action.type === 'orbit') {
     const definition = su7ConceptPack.orbitActions[action.preset]
     if (!definition) return { ok: false, message: `未注册的环绕动作：${action.preset}` }

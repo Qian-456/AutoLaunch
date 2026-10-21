@@ -239,7 +239,7 @@ export function Experience({
       <pointLight position={[1.45, 1.65, 0]} intensity={1.8} distance={2.6} decay={1.8} color="#e8fff9" />
       <CargoInteriorLights />
       <Suspense fallback={null}><VehicleModel /></Suspense>
-      {stageMode === 'studio' && [...cargoPlacements.values()]
+      {[...cargoPlacements.values()]
         .filter((placement) => placement.instanceId !== sessionInstanceId)
         .map((placement) => {
           const entry = findProp(placement.catalogPropId)

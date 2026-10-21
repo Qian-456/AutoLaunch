@@ -5,7 +5,8 @@ import { ACESFilmicToneMapping, SRGBColorSpace } from 'three'
 import { Experience } from './components/Experience'
 import { LaunchPlayer } from './components/LaunchPlayer'
 import { DOOR_LABELS, DOOR_TARGETS, su7ConceptPack, WINDOW_LABELS, WINDOW_TARGETS } from './pack/su7-concept.pack'
-import { parseCommand } from './runtime/command-parser'
+import { routeInput } from './runtime/input-router'
+import { AiPanel, type AiPanelHandle } from './components/AiPanel'
 import { dispatchVehicleAction } from './runtime/action-dispatcher'
 import { createBrowserSpeechRecognition, type BrowserSpeechRecognition } from './runtime/browser-speech'
 import { useExperienceStore } from './store/experience-store'
@@ -72,10 +73,14 @@ export function App() {
   const [isPropWarehouseOpen, setIsPropWarehouseOpen] = useState(false)
   const [propLoadError, setPropLoadError] = useState<PropId | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
-  const [launchCountdown, setLaunchCountdown] = useState<number | null>(null)
   const [feedback, setFeedback] = useState('拖动车身区域可自由旋转 · 滚轮缩放 · 文字可输入：主驾车窗50%')
   const { progress: loadingProgress } = useProgress()
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null)
+  const aiRef = useRef<AiPanelHandle>(null)
+  const playback = useExperienceStore((s) => s.playback)
+  const playbackScript = useExperienceStore((s) => s.playbackScript)
+  const showTakeoverPrompt = useExperienceStore((s) => s.showTakeoverPrompt)
+  const aiEnabled = import.meta.env.VITE_ENABLE_AI_PANELS !== '0'
 
   useEffect(() => {
     // Dual guard: Vite replaces %VITE_APP_SITE_TITLE% in index.html at build time,
@@ -167,9 +172,10 @@ export function App() {
   }, [])
 
   const runCommandText = useCallback((text: string, clearAfter = false) => {
-    const parsed = parseCommand(text)
-    if (!parsed.matched) {
-      setFeedback(parsed.suggestion)
+    const parsed = routeInput(text)
+    if (parsed.kind === 'requirement') {
+      if (aiRef.current) aiRef.current.submitRequirement(text)
+      else setFeedback('请尝试直接指令：打开主驾车窗、打开后备箱、开灯')
       return
     }
     if (useExperienceStore.getState().stageMode === 'launch') {
@@ -180,31 +186,20 @@ export function App() {
     if (clearAfter) setCommand('')
   }, [])
 
-  const toggleLaunchMode = useCallback(async () => {
-    if (useExperienceStore.getState().stageMode === 'launch') {
-      setStageMode('studio')
+  const toggleLaunchMode = useCallback(() => {
+    const state = useExperienceStore.getState()
+    if (state.playback === 'playing') {
+      state.interruptPlayback(); state.keepManual()
       setFeedback('发布会已停止，控制权已交还给您')
-      return
+    } else if (state.playback === 'paused') state.resumePlayback()
+    else {
+      setIsControlPanelOpen(false); setIsCommandDrawerOpen(false); setIsPropWarehouseOpen(false)
+      state.playScript(su7ConceptPack.recordingScript)
     }
-    setIsControlPanelOpen(false)
-    setIsCommandDrawerOpen(false)
-    setIsPropWarehouseOpen(false)
-    setStageMode('studio')
-    dispatchVehicleAction({ type: 'trunk', open: false })
-    dispatchVehicleAction({ type: 'window', target: 'all', open: false, progress: 0 })
-    dispatchVehicleAction({ type: 'lights', target: 'headlight', on: false })
-    dispatchVehicleAction({ type: 'lights', target: 'taillight', on: false })
-    useExperienceStore.getState().requestOrbit(su7ConceptPack.recordingScript[0].camera)
-    setLaunchCountdown(3)
-    setFeedback('发布会准备开始 · 3 秒后自动执行镜头、动作与字幕')
-    try {
-      if (!document.fullscreenElement) await document.documentElement.requestFullscreen()
-    } catch {
-      setFeedback('浏览器未允许全屏；发布会仍会正常开始，可按 F11 手动进入全屏')
-    }
-  }, [setStageMode])
+  }, [])
 
   const finishLaunch = useCallback(() => {
+    useExperienceStore.getState().finishPlayback()
     setFeedback('发布会演示完成，您可以继续自由体验车辆')
   }, [])
 
@@ -227,21 +222,8 @@ export function App() {
   }, [])
 
   useEffect(() => {
-    if (launchCountdown === null) return
-    const timer = window.setTimeout(() => {
-      if (launchCountdown === 1) {
-        setLaunchCountdown(null)
-        setStageMode('launch')
-        return
-      }
-      setLaunchCountdown((current) => current === null ? null : current - 1)
-    }, 1_000)
-    return () => window.clearTimeout(timer)
-  }, [launchCountdown, setStageMode])
-
-  useEffect(() => {
     if (stageMode === 'launch' && manualOrbit) {
-      setFeedback('您已接管发布会镜头；字幕与动作继续，相机不会自动恢复')
+      setFeedback('您已接管发布会；只有显式恢复才会继续')
     }
   }, [manualOrbit, stageMode])
 
@@ -268,7 +250,7 @@ export function App() {
       }
       const visible = visibleTranscript.trim()
       if (visible) setCommand(visible)
-      if (finalTranscript.trim()) runCommandText(finalTranscript.trim())
+      if (finalTranscript.trim()) runCommandText(finalTranscript)
     }
     recognition.onerror = (event) => {
       if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
@@ -310,7 +292,7 @@ export function App() {
   }
 
   return (
-    <main className={`app-shell${isFullscreen && stageMode === 'launch' ? ' app-shell--launch-fullscreen' : ''}${isFullscreen && stageMode === 'launch' && manualOrbit ? ' app-shell--manual-orbit' : ''}`}>
+    <main className={`app-shell${aiEnabled ? ' app-shell--ai' : ''}${isFullscreen && stageMode === 'launch' ? ' app-shell--launch-fullscreen' : ''}${isFullscreen && stageMode === 'launch' && manualOrbit ? ' app-shell--manual-orbit' : ''}`}>
       <header className="topbar">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true" />
@@ -327,7 +309,7 @@ export function App() {
             onClick={toggleLaunchMode}
           >
             <span aria-hidden="true" />
-            {stageMode === 'launch' ? '停止发布会' : '开启发布会'}
+            {playback === 'playing' ? '停止发布会' : playback === 'paused' ? '恢复发布会' : '开启发布会'}
           </button>
           <button className="fullscreen-button" type="button" onClick={toggleFullscreen}>
             {isFullscreen ? '退出全屏' : '全屏浏览'}
@@ -339,7 +321,7 @@ export function App() {
         </div>
       </header>
 
-      <section className={`stage stage--${stageMode}`} aria-label="SU7 Ultra 三维交互展示">
+      <section className={`stage stage--${stageMode}${isCommandDrawerOpen ? ' stage--command-open' : ''}${isControlPanelOpen || isPropWarehouseOpen ? ' stage--controls-open' : ''}`} aria-label="SU7 Ultra 三维交互展示">
         <SceneErrorBoundary>
           <Canvas
             shadows
@@ -378,18 +360,16 @@ export function App() {
         {notice && <div className="notice">{notice}</div>}
 
         <LaunchPlayer
-          active={stageMode === 'launch' && modelStatus === 'ready'}
+          active={playback === 'playing' && modelStatus === 'ready'}
           onFinished={finishLaunch}
-          script={su7ConceptPack.recordingScript}
+          script={playbackScript ?? su7ConceptPack.recordingScript}
         />
 
-        {launchCountdown !== null && (
-          <div className="launch-countdown" role="status" aria-live="assertive">
-            <small>SHOW READY</small>
-            <strong>{launchCountdown}</strong>
-            <span>镜头、动作与字幕即将自动开始</span>
-          </div>
-        )}
+        {showTakeoverPrompt && <div className="takeover-prompt" role="status">
+          <span>已接管自动发布会</span>
+          <button onClick={() => useExperienceStore.getState().resumePlayback()}>恢复自动发布会</button>
+          <button onClick={() => useExperienceStore.getState().keepManual()}>保持手动控制</button>
+        </div>}
 
         <div className="control-deck">
           <button
@@ -399,6 +379,7 @@ export function App() {
             onClick={() => {
               setIsControlPanelOpen((open) => !open)
               setIsPropWarehouseOpen(false)
+              setIsCommandDrawerOpen(false)
             }}
           >
             {isControlPanelOpen ? '收起控制' : '车辆控制'}
@@ -628,7 +609,11 @@ export function App() {
             type="button"
             aria-expanded={isCommandDrawerOpen}
             aria-controls="command-drawer-content"
-            onClick={() => setIsCommandDrawerOpen((open) => !open)}
+            onClick={() => {
+              setIsCommandDrawerOpen((open) => !open)
+              setIsControlPanelOpen(false)
+              setIsPropWarehouseOpen(false)
+            }}
           >
             <span aria-hidden="true">{isCommandDrawerOpen ? '⌄' : '⌃'}</span>
             文字 / 语音
@@ -669,6 +654,8 @@ export function App() {
           </div>
         </div>
       </section>
+
+      {aiEnabled && <AiPanel ref={aiRef} onFeedback={setFeedback} />}
 
       <footer className="legal-bar">
         <span>{import.meta.env.VITE_APP_UNOFFICIAL_DISCLAIMER || '非官方概念演示 | 模型：Ddiaz Design（Sketchfab CC BY-NC-SA 4.0）| 不代表小米官方'}</span>

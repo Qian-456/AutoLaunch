@@ -19,13 +19,28 @@ export function OrbitCameraRig() {
     fromTarget: Vector3
     toTarget: Vector3
   }>(null)
-  const { camera } = useThree()
+  const { camera, gl } = useThree()
+  const playback = useExperienceStore((state) => state.playback)
   const activeOrbitPreset = useExperienceStore((state) => state.activeOrbitPreset)
   const orbitRequestId = useExperienceStore((state) => state.orbitRequestId)
   const manualOrbit = useExperienceStore((state) => state.manualOrbit)
   const beginManualOrbit = useExperienceStore((state) => state.beginManualOrbit)
   const cargoPlacementActive = useExperienceStore((state) => Boolean(state.cargoPlacementSession))
   const definition: OrbitActionDefinition = su7ConceptPack.orbitActions[activeOrbitPreset]
+
+  useEffect(() => {
+    // Claim control before OrbitControls' pointer listener sees this same event.
+    // Script ownership disables user input until this explicit user gesture.
+    const claim = () => {
+      if (useExperienceStore.getState().playback === 'playing') {
+        beginManualOrbit()
+        transition.current = null
+        if (controlsRef.current) controlsRef.current.enabled = true
+      }
+    }
+    gl.domElement.addEventListener('pointerdown', claim, true)
+    return () => gl.domElement.removeEventListener('pointerdown', claim, true)
+  }, [gl, beginManualOrbit])
 
   useEffect(() => {
     const controls = controlsRef.current
@@ -43,7 +58,14 @@ export function OrbitCameraRig() {
   useFrame(() => {
     const controls = controlsRef.current
     const active = transition.current
-    if (!controls || !active) return
+    if (useExperienceStore.getState().manualOrbit) { transition.current = null; return }
+    if (!controls) return
+    if (!active) {
+      // Drei skips update() for disabled controls. Registered script turntables
+      // still need exactly one update, while pointer input stays disabled.
+      if (useExperienceStore.getState().playback === 'playing' && definition.autoRotate) controls.update()
+      return
+    }
     const progress = Math.min(1, (performance.now() - active.startedAt) / active.duration)
     const eased = smoothStep(progress)
     camera.position.lerpVectors(active.fromPosition, active.toPosition, eased)
@@ -56,7 +78,7 @@ export function OrbitCameraRig() {
     <OrbitControls
       ref={controlsRef}
       makeDefault
-      enabled
+      enabled={playback !== 'playing'}
       enableDamping
       dampingFactor={0.065}
       enablePan={false}
@@ -69,7 +91,7 @@ export function OrbitCameraRig() {
       maxPolarAngle={Math.PI * 0.49}
       autoRotate={!manualOrbit && (definition.autoRotate ?? false)}
       autoRotateSpeed={definition.autoRotateSpeed ?? 0.9}
-      onStart={beginManualOrbit}
+      onStart={() => { if (!useExperienceStore.getState().manualOrbit) beginManualOrbit() }}
     />
   )
 }

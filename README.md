@@ -18,6 +18,88 @@
 
 ---
 
+## 自然语言导演与 RAG（本次交付）
+
+当前前端增加独立的需求与问答面板。输入「一家三口周末出游，重点看看装东西方便不方便」并点击“生成并播放”，服务端检索当前 Pack 知识，选择已注册章节，确定性展开脚本；前端复核完整模板后播放。直接指令（如“主驾车窗50%”）仍优先走原确定性解析器，文字和未经改写的语音转写共用输入路由。
+
+### 本地启动
+
+需要 Node 24 / npm 11、Python 3.13。依赖实际验证版本：Node 24.14.0、npm 11.9.0、Python 3.13.5。
+
+```powershell
+npm ci
+python -m venv .venv
+.\.venv\Scripts\python -m pip install -r server/requirements.txt
+
+# 终端一：后端和生产静态页面（首次先 npm run build）
+.\.venv\Scripts\python -m uvicorn server.main:app --host 127.0.0.1 --port 8000
+
+# 终端二：开发前端，/api 自动代理到 8000
+npm run dev
+```
+
+开发地址为 http://localhost:5173；构建后可直接访问 http://127.0.0.1:8000。`GET /api/health` 返回模型字节数、Pack/注册表版本和已配置的供应商名称，不返回密钥。没有配置密钥时服务照常启动。
+
+### 服务端模型配置与降级
+
+在本机 `.env` 填写 `DEEPSEEK_API_KEY` 和/或 `QWEN_API_KEY`；不能使用 `VITE_*` 保存密钥。`.env.example` 列出全部新增变量；已有本地配置不被覆盖。后端启动时读取 `.env`，修改后重启。客户端唯一新增开关为 `VITE_ENABLE_AI_PANELS=1`。
+
+| 供应商 | 模型 | 默认 base URL | 结构化策略 / 思考参数 |
+|---|---|---|---|
+| DeepSeek | `deepseek-flash` | `https://api.deepseek.com` | `json_object` + `thinking: {type: disabled}` |
+| Qwen | `qwen3.8-flash` | `https://dashscope.aliyuncs.com/compatible-mode/v1`（北京兼容域名） | `json_object` + `enable_thinking: false`；可单独改为 `json_schema` |
+
+两家分别有 `*_BASE_URL`、`*_MODEL`、`*_TIMEOUT`、`*_OUTPUT_STRATEGY`。百炼新工作空间可改用控制台给出的地域专属完整地址，如北京 `https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1`；新加坡、香港、弗吉尼亚有独立地域域名和密钥适用范围，不能只换模型名沿用其他地域地址。此处 WorkspaceId 是供应商文档的地址格式说明，不是已配置的本机地址。
+
+核对日期：2026-10-21。官方依据：[DeepSeek 接口与模型名](https://api-docs.deepseek.com/)、[JSON 输出](https://api-docs.deepseek.com/guides/json_mode/)、[DeepSeek Chat 参数](https://api-docs.deepseek.com/api/create-chat-completion/)、[百炼 OpenAI 兼容接口与地域](https://www.alibabacloud.com/help/en/model-studio/qwen-api-via-openai-chat-completions)、[Qwen 结构化输出](https://help.aliyun.com/en/model-studio/qwen-structured-output)。
+
+默认顺序：DeepSeek → 已配置 Qwen → 本地确定性规则。每家默认最多 7 秒，整个模型流程默认 14 秒（`AI_TOTAL_TIMEOUT`），SDK 和模型输出重试均关闭。响应区分认证、限流、超时、服务错误、连接错误和非法输出；前端明确显示 `live` 或 `fallback` 及原因。两家都不配置时，导演和问答仍可在本地后端演示；后端不可用时，前端导演使用有限本地模板，问答显示不可用，不伪造检索结果。
+
+### 契约与知识边界
+
+- LLM 导演只能返回 `{persona, chapterIds}`；章节、字幕、时间轴、相机和动作来自审核模板。最大 6 章、120 秒，不允许重复章。当前无自由时长适配。
+- 权威能力仍是 `su7-concept.pack.ts` 与 `prop-catalog.ts`。`src/pack/ai-registry.ts` 定义 AI 可用的有限能力子集；`npm run registry:export` 生成 `public/fallbacks/` 四个 JSON。`npm run registry:check` 与构建检查漂移，前后端消费相同数据。
+- 新装载章节只允许 `cargo:demonstrate:two_suitcases`，调用现有 dispatcher、cargo-layout 和碰撞检查；不允许 LLM spawn、旋转或生成坐标。模型代理不代表实车装载能力。
+- Markdown 按标题、段落及表格行切块；先过滤 Pack 和车型适用范围，再用中文别名和 BM25 排序。普通版实测、推算、索引关键词不作为 Ultra 参数证据。对来源差异保留原始口径，不把媒体资料自动升级为官方事实。
+- 当前答案是可核验的证据摘录；在线模型只重排本次检索的证据 ID，不自由生成参数。服务端验证 ID 并回填出处链接。`/api/knowledge/{chunkId}` 可查完整证据，`/api/registry` 可查软件能力来源。知识资料的外部来源链接未全部重新核验，界面明确标注。
+- `Retriever.search(query, pack_id, limit)` 是后续 embedding/Qdrant 的替换接口；替换实现必须保留 scope 预过滤、Chunk 元数据与引用校验，不能改变动作执行路径。
+- 实体定义区分 `packId/entityId/instanceId`、能力、归属/装载关系、署名和知识关联。相机与章节单列为资源。实例从 Zustand 投影；可选 `TargetedVehicleAction` 适配器校验实例存在、Pack 及能力后交给同一 dispatcher，不新增动画状态。当前没有第二款完整车型。
+
+### 播放、打断与验收
+
+“生成并播放”是显式播放授权；停止、按钮、文字、语音或 Orbit 接管后不会自动恢复。首次提示可选“恢复自动发布会 / 保持手动控制”；选择保持后本次页面会话不再提示。恢复从下一章起点开始；最后一章则继续未执行部分。新需求会取消旧请求和旧计划；计划标识与控制权代次拦截迟到响应。空脚本安全退出。
+
+```powershell
+npm test
+npm run build
+.\.venv\Scripts\python -m pytest -q
+.\.venv\Scripts\python -m server.fixtures --check
+
+# 以下显式启用真实付费 API；常规测试全部使用可控 Mock/本地 fallback。
+.\.venv\Scripts\python -m server.smoke --live --provider deepseek
+.\.venv\Scripts\python -m server.smoke --live --provider qwen
+.\.venv\Scripts\python -m server.smoke --live --provider qwen --workflow
+```
+
+手动检查：家庭需求生成/播放 → 车辆按钮或 Orbit 接管 → 显式恢复；性能需求替换旧计划；问“后备箱多大？”查看 chunk/来源和尾门联动；问“今天天气”应无动作；关闭后端验证错误反馈；1280px 桌面确保字幕、按钮、输入和合规条可见。麦克风授权由浏览器管理，不在自动测试中录音。
+
+### 部署与依赖许可
+
+这已是需要后端的应用；纯静态 Vercel/ESA 页面只提供前端本地模板与手动入口，不能保管服务端密钥或执行在线 RAG。生产推荐运行本仓库 FastAPI + dist，由已有反向代理提供 HTTPS；不在本次自动发布远程服务。
+
+```powershell
+npm run build
+.\.venv\Scripts\python -m uvicorn server.main:app --host 127.0.0.1 --port 8000
+# 或（需已安装 Docker）：
+docker compose up --build -d
+```
+
+Docker 多阶段构建不会复制 `.env`；compose 仅在运行时从本机注入配置。Docker 路径本次未在此机器实测。
+
+Python 新增依赖由 `server/requirements.txt` 和 `requirements.lock.txt` 固定，已在 Python 3.13.5 验证：FastAPI 0.156.4（MIT）、Pydantic 2.14.1（MIT）、Pydantic AI Slim 2.58.0（MIT，仅 OpenAI extra）、Uvicorn 0.54.0（BSD-3-Clause）、OpenAI Python SDK 3.35.1（Apache-2.0）、httpx 0.28.1（BSD-3-Clause）、python-dotenv 1.2.4（BSD-3-Clause），测试使用 pytest 9.1.1（MIT）、pytest-asyncio 1.4.0（Apache-2.0）。未引入 LangGraph、LlamaIndex、向量数据库或第二套前端状态库；原有 npm 锁文件继续保留。
+
+---
+
 ## 项目定位
 
 AutoLaunch 要验证的核心观点：**用户不必观看完全相同的产品发布会**。AI 可以根据用户兴趣，重新选择章节、镜头、车辆动作与讲解，并允许用户中途接管。

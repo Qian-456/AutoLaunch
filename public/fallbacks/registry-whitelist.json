@@ -1,0 +1,746 @@
+{
+  "schemaVersion": "1.0.0",
+  "registryVersion": "0.1.0-director.1",
+  "packId": "su7-ultra-concept",
+  "packVersion": "0.1.0",
+  "model": "SU7 Ultra",
+  "personas": [
+    "family",
+    "performance"
+  ],
+  "cameras": [
+    "hero_front_left",
+    "front",
+    "driver_side",
+    "rear_three_quarter",
+    "cargo_rear",
+    "cargo_overview",
+    "turntable"
+  ],
+  "chapterIds": [
+    "front-design",
+    "frameless-windows",
+    "rear-hatch",
+    "interactive-finale",
+    "family-space",
+    "cargo-demo"
+  ],
+  "actions": [
+    {
+      "actionId": "orbit:hero_front_left",
+      "action": {
+        "type": "orbit",
+        "preset": "hero_front_left"
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "orbit:front",
+      "action": {
+        "type": "orbit",
+        "preset": "front"
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "orbit:driver_side",
+      "action": {
+        "type": "orbit",
+        "preset": "driver_side"
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "orbit:rear_three_quarter",
+      "action": {
+        "type": "orbit",
+        "preset": "rear_three_quarter"
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "orbit:cargo_rear",
+      "action": {
+        "type": "orbit",
+        "preset": "cargo_rear"
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "orbit:cargo_overview",
+      "action": {
+        "type": "orbit",
+        "preset": "cargo_overview"
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "orbit:turntable",
+      "action": {
+        "type": "orbit",
+        "preset": "turntable"
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "window:driver_front:open",
+      "action": {
+        "type": "window",
+        "target": "driver_front",
+        "open": true,
+        "progress": 100
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "window:passenger_front:open",
+      "action": {
+        "type": "window",
+        "target": "passenger_front",
+        "open": true,
+        "progress": 100
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "window:driver_rear:open",
+      "action": {
+        "type": "window",
+        "target": "driver_rear",
+        "open": true,
+        "progress": 100
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "window:passenger_rear:open",
+      "action": {
+        "type": "window",
+        "target": "passenger_rear",
+        "open": true,
+        "progress": 100
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "window:all:open",
+      "action": {
+        "type": "window",
+        "target": "all",
+        "open": true,
+        "progress": 100
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "door:driver_front:open",
+      "action": {
+        "type": "door",
+        "target": "driver_front",
+        "open": true,
+        "progress": 100
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "door:passenger_front:open",
+      "action": {
+        "type": "door",
+        "target": "passenger_front",
+        "open": true,
+        "progress": 100
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "door:driver_rear:open",
+      "action": {
+        "type": "door",
+        "target": "driver_rear",
+        "open": true,
+        "progress": 100
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "door:passenger_rear:open",
+      "action": {
+        "type": "door",
+        "target": "passenger_rear",
+        "open": true,
+        "progress": 100
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "door:all:open",
+      "action": {
+        "type": "door",
+        "target": "all",
+        "open": true,
+        "progress": 100
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "hatch:front_hatch:open",
+      "action": {
+        "type": "hatch",
+        "target": "front_hatch",
+        "open": true,
+        "progress": 100
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "hatch:rear_hatch:open",
+      "action": {
+        "type": "hatch",
+        "target": "rear_hatch",
+        "open": true,
+        "progress": 100
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "trunk:open",
+      "action": {
+        "type": "trunk",
+        "open": true
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "lights:headlight:on",
+      "action": {
+        "type": "lights",
+        "target": "headlight",
+        "on": true
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "lights:taillight:on",
+      "action": {
+        "type": "lights",
+        "target": "taillight",
+        "on": true
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "window:driver_front:close",
+      "action": {
+        "type": "window",
+        "target": "driver_front",
+        "open": false,
+        "progress": 0
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "window:passenger_front:close",
+      "action": {
+        "type": "window",
+        "target": "passenger_front",
+        "open": false,
+        "progress": 0
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "window:driver_rear:close",
+      "action": {
+        "type": "window",
+        "target": "driver_rear",
+        "open": false,
+        "progress": 0
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "window:passenger_rear:close",
+      "action": {
+        "type": "window",
+        "target": "passenger_rear",
+        "open": false,
+        "progress": 0
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "window:all:close",
+      "action": {
+        "type": "window",
+        "target": "all",
+        "open": false,
+        "progress": 0
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "door:driver_front:close",
+      "action": {
+        "type": "door",
+        "target": "driver_front",
+        "open": false,
+        "progress": 0
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "door:passenger_front:close",
+      "action": {
+        "type": "door",
+        "target": "passenger_front",
+        "open": false,
+        "progress": 0
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "door:driver_rear:close",
+      "action": {
+        "type": "door",
+        "target": "driver_rear",
+        "open": false,
+        "progress": 0
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "door:passenger_rear:close",
+      "action": {
+        "type": "door",
+        "target": "passenger_rear",
+        "open": false,
+        "progress": 0
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "door:all:close",
+      "action": {
+        "type": "door",
+        "target": "all",
+        "open": false,
+        "progress": 0
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "hatch:front_hatch:close",
+      "action": {
+        "type": "hatch",
+        "target": "front_hatch",
+        "open": false,
+        "progress": 0
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "hatch:rear_hatch:close",
+      "action": {
+        "type": "hatch",
+        "target": "rear_hatch",
+        "open": false,
+        "progress": 0
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "trunk:close",
+      "action": {
+        "type": "trunk",
+        "open": false
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "lights:headlight:off",
+      "action": {
+        "type": "lights",
+        "target": "headlight",
+        "on": false
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "lights:taillight:off",
+      "action": {
+        "type": "lights",
+        "target": "taillight",
+        "on": false
+      },
+      "entityId": "vehicle"
+    },
+    {
+      "actionId": "cargo:demonstrate:two_suitcases",
+      "action": {
+        "type": "cargo",
+        "operation": "demonstrate",
+        "combinationId": "two_suitcases"
+      },
+      "entityId": "vehicle"
+    }
+  ],
+  "entities": [
+    {
+      "packId": "su7-ultra-concept",
+      "entityId": "vehicle",
+      "kind": "vehicle",
+      "parent": null,
+      "capabilities": [
+        "orbit:hero_front_left",
+        "orbit:front",
+        "orbit:driver_side",
+        "orbit:rear_three_quarter",
+        "orbit:cargo_rear",
+        "orbit:cargo_overview",
+        "orbit:turntable",
+        "window:driver_front:open",
+        "window:passenger_front:open",
+        "window:driver_rear:open",
+        "window:passenger_rear:open",
+        "window:all:open",
+        "door:driver_front:open",
+        "door:passenger_front:open",
+        "door:driver_rear:open",
+        "door:passenger_rear:open",
+        "door:all:open",
+        "hatch:front_hatch:open",
+        "hatch:rear_hatch:open",
+        "trunk:open",
+        "lights:headlight:on",
+        "lights:taillight:on",
+        "window:driver_front:close",
+        "window:passenger_front:close",
+        "window:driver_rear:close",
+        "window:passenger_rear:close",
+        "window:all:close",
+        "door:driver_front:close",
+        "door:passenger_front:close",
+        "door:driver_rear:close",
+        "door:passenger_rear:close",
+        "door:all:close",
+        "hatch:front_hatch:close",
+        "hatch:rear_hatch:close",
+        "trunk:close",
+        "lights:headlight:off",
+        "lights:taillight:off",
+        "cargo:demonstrate:two_suitcases"
+      ],
+      "attribution": {
+        "author": "Ddiaz Design",
+        "source": "Sketchfab",
+        "sourceUrl": "https://skfb.ly/pKv9Z",
+        "license": "CC BY-NC-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-nc-sa/4.0/"
+      },
+      "knowledgeRefs": [
+        "knowledge/"
+      ]
+    },
+    {
+      "packId": "su7-ultra-concept",
+      "entityId": "window_driver_front",
+      "kind": "part",
+      "parent": "vehicle",
+      "capabilities": [
+        "window:driver_front:open",
+        "window:driver_front:close"
+      ],
+      "attribution": {
+        "author": "Ddiaz Design",
+        "source": "Sketchfab",
+        "sourceUrl": "https://skfb.ly/pKv9Z",
+        "license": "CC BY-NC-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-nc-sa/4.0/"
+      },
+      "knowledgeRefs": [
+        "knowledge/"
+      ]
+    },
+    {
+      "packId": "su7-ultra-concept",
+      "entityId": "window_passenger_front",
+      "kind": "part",
+      "parent": "vehicle",
+      "capabilities": [
+        "window:passenger_front:open",
+        "window:passenger_front:close"
+      ],
+      "attribution": {
+        "author": "Ddiaz Design",
+        "source": "Sketchfab",
+        "sourceUrl": "https://skfb.ly/pKv9Z",
+        "license": "CC BY-NC-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-nc-sa/4.0/"
+      },
+      "knowledgeRefs": [
+        "knowledge/"
+      ]
+    },
+    {
+      "packId": "su7-ultra-concept",
+      "entityId": "window_driver_rear",
+      "kind": "part",
+      "parent": "vehicle",
+      "capabilities": [
+        "window:driver_rear:open",
+        "window:driver_rear:close"
+      ],
+      "attribution": {
+        "author": "Ddiaz Design",
+        "source": "Sketchfab",
+        "sourceUrl": "https://skfb.ly/pKv9Z",
+        "license": "CC BY-NC-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-nc-sa/4.0/"
+      },
+      "knowledgeRefs": [
+        "knowledge/"
+      ]
+    },
+    {
+      "packId": "su7-ultra-concept",
+      "entityId": "window_passenger_rear",
+      "kind": "part",
+      "parent": "vehicle",
+      "capabilities": [
+        "window:passenger_rear:open",
+        "window:passenger_rear:close"
+      ],
+      "attribution": {
+        "author": "Ddiaz Design",
+        "source": "Sketchfab",
+        "sourceUrl": "https://skfb.ly/pKv9Z",
+        "license": "CC BY-NC-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-nc-sa/4.0/"
+      },
+      "knowledgeRefs": [
+        "knowledge/"
+      ]
+    },
+    {
+      "packId": "su7-ultra-concept",
+      "entityId": "hatch_rear",
+      "kind": "part",
+      "parent": "vehicle",
+      "capabilities": [
+        "hatch:rear_hatch:open",
+        "trunk:open",
+        "hatch:rear_hatch:close",
+        "trunk:close"
+      ],
+      "attribution": {
+        "author": "Ddiaz Design",
+        "source": "Sketchfab",
+        "sourceUrl": "https://skfb.ly/pKv9Z",
+        "license": "CC BY-NC-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-nc-sa/4.0/"
+      },
+      "knowledgeRefs": [
+        "knowledge/"
+      ]
+    },
+    {
+      "packId": "su7-ultra-concept",
+      "entityId": "hatch_front",
+      "kind": "part",
+      "parent": "vehicle",
+      "capabilities": [
+        "hatch:front_hatch:open",
+        "hatch:front_hatch:close"
+      ],
+      "attribution": {
+        "author": "Ddiaz Design",
+        "source": "Sketchfab",
+        "sourceUrl": "https://skfb.ly/pKv9Z",
+        "license": "CC BY-NC-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-nc-sa/4.0/"
+      },
+      "knowledgeRefs": [
+        "knowledge/"
+      ]
+    },
+    {
+      "packId": "su7-ultra-concept",
+      "entityId": "door_driver_front",
+      "kind": "part",
+      "parent": "vehicle",
+      "capabilities": [
+        "door:driver_front:open",
+        "door:driver_front:close"
+      ],
+      "attribution": {
+        "author": "Ddiaz Design",
+        "source": "Sketchfab",
+        "sourceUrl": "https://skfb.ly/pKv9Z",
+        "license": "CC BY-NC-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-nc-sa/4.0/"
+      },
+      "knowledgeRefs": [
+        "knowledge/"
+      ]
+    },
+    {
+      "packId": "su7-ultra-concept",
+      "entityId": "door_passenger_front",
+      "kind": "part",
+      "parent": "vehicle",
+      "capabilities": [
+        "door:passenger_front:open",
+        "door:passenger_front:close"
+      ],
+      "attribution": {
+        "author": "Ddiaz Design",
+        "source": "Sketchfab",
+        "sourceUrl": "https://skfb.ly/pKv9Z",
+        "license": "CC BY-NC-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-nc-sa/4.0/"
+      },
+      "knowledgeRefs": [
+        "knowledge/"
+      ]
+    },
+    {
+      "packId": "su7-ultra-concept",
+      "entityId": "door_driver_rear",
+      "kind": "part",
+      "parent": "vehicle",
+      "capabilities": [
+        "door:driver_rear:open",
+        "door:driver_rear:close"
+      ],
+      "attribution": {
+        "author": "Ddiaz Design",
+        "source": "Sketchfab",
+        "sourceUrl": "https://skfb.ly/pKv9Z",
+        "license": "CC BY-NC-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-nc-sa/4.0/"
+      },
+      "knowledgeRefs": [
+        "knowledge/"
+      ]
+    },
+    {
+      "packId": "su7-ultra-concept",
+      "entityId": "door_passenger_rear",
+      "kind": "part",
+      "parent": "vehicle",
+      "capabilities": [
+        "door:passenger_rear:open",
+        "door:passenger_rear:close"
+      ],
+      "attribution": {
+        "author": "Ddiaz Design",
+        "source": "Sketchfab",
+        "sourceUrl": "https://skfb.ly/pKv9Z",
+        "license": "CC BY-NC-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-nc-sa/4.0/"
+      },
+      "knowledgeRefs": [
+        "knowledge/"
+      ]
+    },
+    {
+      "packId": "su7-ultra-concept",
+      "entityId": "trunk",
+      "kind": "part",
+      "parent": "vehicle",
+      "capabilities": [
+        "trunk:open",
+        "trunk:close"
+      ],
+      "attribution": {
+        "author": "Ddiaz Design",
+        "source": "Sketchfab",
+        "sourceUrl": "https://skfb.ly/pKv9Z",
+        "license": "CC BY-NC-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-nc-sa/4.0/"
+      },
+      "knowledgeRefs": [
+        "knowledge/"
+      ]
+    },
+    {
+      "packId": "su7-ultra-concept",
+      "entityId": "lights_headlight",
+      "kind": "part",
+      "parent": "vehicle",
+      "capabilities": [
+        "lights:headlight:on",
+        "lights:headlight:off"
+      ],
+      "attribution": {
+        "author": "Ddiaz Design",
+        "source": "Sketchfab",
+        "sourceUrl": "https://skfb.ly/pKv9Z",
+        "license": "CC BY-NC-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-nc-sa/4.0/"
+      },
+      "knowledgeRefs": [
+        "knowledge/"
+      ]
+    },
+    {
+      "packId": "su7-ultra-concept",
+      "entityId": "lights_taillight",
+      "kind": "part",
+      "parent": "vehicle",
+      "capabilities": [
+        "lights:taillight:on",
+        "lights:taillight:off"
+      ],
+      "attribution": {
+        "author": "Ddiaz Design",
+        "source": "Sketchfab",
+        "sourceUrl": "https://skfb.ly/pKv9Z",
+        "license": "CC BY-NC-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-nc-sa/4.0/"
+      },
+      "knowledgeRefs": [
+        "knowledge/"
+      ]
+    },
+    {
+      "packId": "su7-ultra-concept",
+      "entityId": "prop:carry_on_20",
+      "kind": "prop",
+      "parent": null,
+      "capabilities": [
+        "cargo:move",
+        "cargo:remove"
+      ],
+      "attribution": {
+        "author": "AutoLaunch Contributors",
+        "source": "Original procedural asset",
+        "license": "CC BY-NC-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-nc-sa/4.0/"
+      },
+      "knowledgeRefs": []
+    },
+    {
+      "packId": "su7-ultra-concept",
+      "entityId": "prop:checked_24",
+      "kind": "prop",
+      "parent": null,
+      "capabilities": [
+        "cargo:move",
+        "cargo:remove"
+      ],
+      "attribution": {
+        "author": "AutoLaunch Contributors",
+        "source": "Original procedural asset",
+        "license": "CC BY-NC-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-nc-sa/4.0/"
+      },
+      "knowledgeRefs": []
+    }
+  ],
+  "limits": {
+    "maxChapters": 6,
+    "minDurationMs": 1000,
+    "maxDurationMs": 120000
+  }
+}
