@@ -390,8 +390,17 @@ function dispatchSingle(action: VehicleRuntimeAction): DispatchResult {
 }
 
 export function dispatchVehicleAction(action: VehicleAction, source: 'manual' | 'script' | 'rag' = 'manual'): DispatchResult {
+  return dispatchVehicleActions([action], source)[0]
+}
+
+export function dispatchVehicleActions(actions: readonly VehicleAction[], source: 'manual' | 'script' | 'rag' = 'manual'): DispatchResult[] {
+  // One takeover per intention keeps later part actions from cancelling its camera.
+  if (actions.length && source !== 'script') useExperienceStore.getState().interruptPlayback()
+  return actions.map((action) => dispatchTrackedAction(action, source))
+}
+
+function dispatchTrackedAction(action: VehicleAction, source: 'manual' | 'script' | 'rag'): DispatchResult {
   const state = useExperienceStore.getState()
-  if (source !== 'script') state.interruptPlayback()
   const existing = new Set(useExperienceStore.getState().activeActions.keys())
   const result = dispatchCore(action, source)
   if (source === 'script' && action.type === 'cargo' && action.operation === 'demonstrate' && result.ok) {
@@ -413,7 +422,7 @@ function dispatchCore(action: VehicleAction, source: 'manual' | 'script' | 'rag'
     const definition = su7ConceptPack.orbitActions[action.preset]
     if (!definition) return { ok: false, message: `未注册的环绕动作：${action.preset}` }
     useExperienceStore.getState().requestOrbit(action.preset)
-    return { ok: true, message: `镜头已切换：${action.preset}` }
+    return { ok: true, message: '已切换到所选镜头' }
   }
 
   if (action.type === 'window' && action.target === 'all') {

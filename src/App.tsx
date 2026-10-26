@@ -2,7 +2,7 @@ import { Component, type CSSProperties, type ErrorInfo, type FormEvent, type Rea
 import { Canvas } from '@react-three/fiber'
 import { useProgress } from '@react-three/drei'
 import { ACESFilmicToneMapping, SRGBColorSpace } from 'three'
-import { Experience } from './components/Experience'
+import { Experience, showroomEnvironments, type ShowroomEnvironment } from './components/Experience'
 import { LaunchPlayer } from './components/LaunchPlayer'
 import { DOOR_LABELS, DOOR_TARGETS, su7ConceptPack, WINDOW_LABELS, WINDOW_TARGETS } from './pack/su7-concept.pack'
 import { routeInput } from './runtime/input-router'
@@ -73,6 +73,8 @@ export function App() {
   const [isPropWarehouseOpen, setIsPropWarehouseOpen] = useState(false)
   const [propLoadError, setPropLoadError] = useState<PropId | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [environment, setEnvironment] = useState<ShowroomEnvironment>('studio')
+  const [isAiReading, setIsAiReading] = useState(false)
   const [feedback, setFeedback] = useState('拖动车身区域可自由旋转 · 滚轮缩放 · 文字可输入：主驾车窗50%')
   const { progress: loadingProgress } = useProgress()
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null)
@@ -172,10 +174,14 @@ export function App() {
   }, [])
 
   const runCommandText = useCallback((text: string, clearAfter = false) => {
+    if (aiEnabled && aiRef.current) {
+      aiRef.current.submitText(text)
+      if (clearAfter) setCommand('')
+      return
+    }
     const parsed = routeInput(text)
     if (parsed.kind === 'requirement') {
-      if (aiRef.current) aiRef.current.submitRequirement(text)
-      else setFeedback('请尝试直接指令：打开主驾车窗、打开后备箱、开灯')
+      setFeedback('请尝试直接指令：打开主驾车窗、打开后备箱、开灯')
       return
     }
     if (useExperienceStore.getState().stageMode === 'launch') {
@@ -184,7 +190,7 @@ export function App() {
     const result = dispatchVehicleAction(parsed.action)
     setFeedback(result.message)
     if (clearAfter) setCommand('')
-  }, [])
+  }, [aiEnabled])
 
   const toggleLaunchMode = useCallback(() => {
     const state = useExperienceStore.getState()
@@ -297,7 +303,7 @@ export function App() {
         <div className="brand">
           <span className="brand-mark" aria-hidden="true" />
           <div>
-            <p>AUTOLAUNCH / PRODUCT VIEW</p>
+            <p>AutoLaunch · 产品探索</p>
             <h1>2025 SU7 ULTRA · 交互式数字展车</h1>
           </div>
         </div>
@@ -316,13 +322,14 @@ export function App() {
           </button>
           <div className={`model-state model-state--${modelStatus}`}>
             <span />
-            {modelStatus === 'ready' ? '3D READY' : modelStatus === 'error' ? 'MODEL ERROR' : `${Math.round(loadingProgress)}% LOADING`}
+            {modelStatus === 'ready' ? '展车已就绪' : modelStatus === 'error' ? '模型载入失败' : `载入中 ${Math.round(loadingProgress)}%`}
           </div>
         </div>
       </header>
 
-      <section className={`stage stage--${stageMode}${isCommandDrawerOpen ? ' stage--command-open' : ''}${isControlPanelOpen || isPropWarehouseOpen ? ' stage--controls-open' : ''}`} aria-label="SU7 Ultra 三维交互展示">
+      <section className={`stage stage--${stageMode} stage--${environment}${isCommandDrawerOpen ? ' stage--command-open' : ''}${isControlPanelOpen || isPropWarehouseOpen ? ' stage--controls-open' : ''}`} style={{ backgroundColor: showroomEnvironments[environment].sky }} aria-label="SU7 Ultra 三维交互展示">
         <SceneErrorBoundary>
+          <div className="vehicle-viewport">
           <Canvas
             shadows
             dpr={[1, 1.5]}
@@ -337,15 +344,22 @@ export function App() {
             }}
           >
             <Experience
+              environment={environment}
+              viewInsets={aiEnabled ? [isControlPanelOpen || isPropWarehouseOpen ? 425 : 245, isAiReading && !isControlPanelOpen && !isPropWarehouseOpen ? 375 : 32, 105, 180] : undefined}
               onPropLoadError={handlePropLoadError}
               onCargoFeedback={setFeedback}
             />
           </Canvas>
+          </div>
         </SceneErrorBoundary>
 
         <div className="hero-copy">
-          <p className="eyebrow">PERFORMANCE, REFRAMED</p>
+          <h2>从你的好奇心出发</h2>
           <p>点击真实车窗直接开合 · 拖动镜头自由观察</p>
+        </div>
+
+        <div className="environment-switcher" role="group" aria-label="展示环境">
+          {(Object.keys(showroomEnvironments) as ShowroomEnvironment[]).map((id) => <button key={id} type="button" aria-pressed={environment === id} onClick={() => setEnvironment(id)}>{showroomEnvironments[id].label}</button>)}
         </div>
 
         {modelStatus === 'loading' && (
@@ -603,7 +617,7 @@ export function App() {
           </nav>
         </div>
 
-        <div className={`interaction-drawer${isCommandDrawerOpen ? ' interaction-drawer--open' : ''}`}>
+        {!aiEnabled && <div className={`interaction-drawer${isCommandDrawerOpen ? ' interaction-drawer--open' : ''}`}>
           <button
             className="interaction-drawer__handle"
             type="button"
@@ -652,10 +666,10 @@ export function App() {
             </form>
             <p>{feedback}</p>
           </div>
-        </div>
+        </div>}
+        {aiEnabled && <AiPanel ref={aiRef} command={command} onCommandChange={setCommand} onFeedback={setFeedback} voiceState={voiceState} onVoice={toggleVoice} onReadingChange={setIsAiReading} />}
+        {aiEnabled && <p className="interaction-feedback" role="status">{feedback}</p>}
       </section>
-
-      {aiEnabled && <AiPanel ref={aiRef} onFeedback={setFeedback} />}
 
       <footer className="legal-bar">
         <span>{import.meta.env.VITE_APP_UNOFFICIAL_DISCLAIMER || '非官方概念演示 | 模型：Ddiaz Design（Sketchfab CC BY-NC-SA 4.0）| 不代表小米官方'}</span>

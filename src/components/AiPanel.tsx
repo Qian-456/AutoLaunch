@@ -1,151 +1,187 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { requestDirector, requestRag, RequestGate } from '../runtime/ai-client'
-import { routeInput } from '../runtime/input-router'
-import { dispatchVehicleAction } from '../runtime/action-dispatcher'
+import { routeAssistantInput, type AssistantIntent } from '../runtime/input-router'
+import { dispatchVehicleActions } from '../runtime/action-dispatcher'
+import { explorationTopics } from '../pack/exploration-topics'
 import type { Citation, DirectorResponse, RagResponse, ResponseMeta } from '../runtime/ai-contract'
 import { useExperienceStore } from '../store/experience-store'
+import type { VoiceState } from '../types'
 
-export type AiPanelHandle = { submitRequirement: (text: string) => void }
-type Message = { question: string; response?: RagResponse; error?: string }
+export type AiPanelHandle = { submitText: (text: string) => void }
+type Message = { text: string; response?: RagResponse; plan?: DirectorResponse; error?: string }
+type Props = {
+  command: string; onCommandChange: (text: string) => void; onFeedback: (text: string) => void
+  voiceState: VoiceState; onVoice: () => void
+  onReadingChange: (open: boolean) => void
+}
 
 function SourceMode({ meta }: { meta: ResponseMeta }) {
-  return <p className="ai-mode">{meta.mode === 'live' ? `在线 · ${meta.provider} / ${meta.model}` : '本地规则 fallback'}
-    {meta.fallbackReason && <small>原因：{meta.fallbackReason}</small>}
-  </p>
+  return <p className="ai-mode">{meta.mode === 'live' ? '在线检索结果' : '精选资料与本地规则'}</p>
 }
+
 function Citations({ citations }: { citations: Citation[] }) {
-  return <details className="ai-citations"><summary>查看 {citations.length} 条证据与出处</summary>
-    {citations.map((c, index) => <article key={c.chunkId}>
-      <strong>[{index + 1}] {c.heading}</strong>
-      <small>{c.documentPath} · {c.modelScope} · {c.sourceType} · 精选资料未实时复核</small>
-      <code>{c.chunkId}</code>
-      {c.sources.map((s, i) => <a key={`${s.url}-${i}`} href={s.url} target="_blank" rel="noreferrer">{s.title || '原始来源'} ↗</a>)}
-      <p>{c.text}</p>
+  return <details className="ai-citations"><summary>资料与适用范围（{citations.length}）</summary>
+    {!citations.length && <p>本次没有可引用的产品资料；演示仅使用已注册能力。</p>}
+    {citations.map((citation, index) => <article key={citation.chunkId}>
+      <strong>[{index + 1}] {citation.heading}</strong>
+      <small>{citation.modelScope === 'SU7-Ultra' ? 'SU7 Ultra' : 'SU7 车系共用资料'} · 资料版本 {citation.version} · 外部来源未实时复核</small>
+      {citation.sources.map((source, i) => <a key={`${source.url}-${i}`} href={source.url} target="_blank" rel="noreferrer">{source.title || '原始来源'} ↗</a>)}
+      <p>{citation.text}</p>
     </article>)}
   </details>
 }
 
-export const AiPanel = forwardRef<AiPanelHandle, { onFeedback: (text: string) => void }>(function AiPanel({ onFeedback }, ref) {
-  const [requirement, setRequirement] = useState('一家三口周末出游，重点看看装东西方便不方便。')
-  const [question, setQuestion] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [asking, setAsking] = useState(false)
-  const [plan, setPlan] = useState<DirectorResponse | null>(null)
+export const AiPanel = forwardRef<AiPanelHandle, Props>(function AiPanel({ command, onCommandChange, onFeedback, voiceState, onVoice, onReadingChange }, ref) {
+  const [intent, setIntent] = useState<AssistantIntent>('auto')
+  const [topic, setTopic] = useState<(typeof explorationTopics)[number] | null>(null)
+  const [reading, setReading] = useState<'topic' | 'answer' | null>(null)
+  const [busy, setBusy] = useState<'question' | 'director' | null>(null)
+  const [pendingText, setPendingText] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
-  const [error, setError] = useState('')
-  const directorGate = useRef(new RequestGate(() => useExperienceStore.getState().controlEpoch))
-  const ragGate = useRef(new RequestGate(() => useExperienceStore.getState().controlEpoch))
-  const playback = useExperienceStore((s) => s.playback)
-  const modelStatus = useExperienceStore((s) => s.modelStatus)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const gate = useRef(new RequestGate(() => useExperienceStore.getState().controlEpoch))
+  const playback = useExperienceStore((state) => state.playback)
+  const modelStatus = useExperienceStore((state) => state.modelStatus)
+  const latest = messages[messages.length - 1]
 
-  useEffect(() => { if (playback === 'playing') setError('') }, [playback])
+  useEffect(() => { onReadingChange(reading !== null) }, [reading, onReadingChange])
 
   useEffect(() => {
     const unsubscribe = useExperienceStore.subscribe((state, previous) => {
-      if (state.controlEpoch !== previous.controlEpoch) {
-        directorGate.current.cancel(); ragGate.current.cancel(); setBusy(false); setAsking(false)
-      }
+      if (state.controlEpoch !== previous.controlEpoch) { gate.current.cancel(); setBusy(null) }
     })
-    return () => { unsubscribe(); directorGate.current.cancel(); ragGate.current.cancel() }
+    return () => { unsubscribe(); gate.current.cancel() }
   }, [])
 
-  async function generate(text: string) {
+  function closeReader() {
+    gate.current.cancel(); setBusy(null); setReading(null); inputRef.current?.focus()
+  }
+
+  useEffect(() => {
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && reading) closeReader()
+    }
+    window.addEventListener('keydown', keydown)
+    return () => window.removeEventListener('keydown', keydown)
+  }, [reading])
+
+  async function submit(text: string, purpose: AssistantIntent = intent) {
     if (!text.trim()) return
-    setRequirement(text)
-    const routed = routeInput(text)
+    const routed = routeAssistantInput(text, purpose)
+    onCommandChange('')
     if (routed.kind === 'command') {
-      onFeedback(dispatchVehicleAction(routed.action).message); return
+      for (const result of dispatchVehicleActions([routed.action])) onFeedback(result.message)
+      return
     }
     useExperienceStore.getState().interruptPlayback()
-    const token = directorGate.current.begin()
-    setBusy(true); setError('')
+    const token = gate.current.begin()
+    setBusy(routed.kind); setPendingText(text); setReading('answer')
     try {
-      const response = await requestDirector(text, token.signal)
-      if (!directorGate.current.accepts(token)) return
-      setPlan(response)
-      if (useExperienceStore.getState().modelStatus === 'ready') {
-        useExperienceStore.getState().playScript(response.chapters)
-        onFeedback('导演计划已校验并开始播放，可随时手动接管')
-      } else setError('计划已生成；模型就绪后请显式点击播放。')
-    } catch {
-      if (directorGate.current.accepts(token)) setError('生成中断，请重试；手动操作仍然可用。')
-    } finally { if (directorGate.current.accepts(token)) setBusy(false) }
-  }
-  useImperativeHandle(ref, () => ({ submitRequirement: (text) => { void generate(text) } }))
-
-  async function ask(text: string) {
-    if (!text.trim()) return
-    const routed = routeInput(text)
-    if (routed.kind === 'command') { onFeedback(dispatchVehicleAction(routed.action).message); return }
-    useExperienceStore.getState().interruptPlayback()
-    const token = ragGate.current.begin()
-    setAsking(true); setError(''); setQuestion('')
-    try {
-      const response = await requestRag(text, token.signal)
-      if (!ragGate.current.accepts(token)) return
-      setMessages((old) => [...old.slice(-7), { question: text, response }])
-      // Validate the whole response before this synchronous action batch. No timers.
-      if (useExperienceStore.getState().modelStatus === 'ready') {
-        for (const action of response.linkedActions) onFeedback(dispatchVehicleAction(action, 'rag').message)
+      if (routed.kind === 'director') {
+        const plan = await requestDirector(text, token.signal)
+        if (!gate.current.accepts(token)) return
+        setMessages((old) => [...old.slice(-7), { text, plan }])
+        if (useExperienceStore.getState().modelStatus === 'ready') {
+          useExperienceStore.getState().playScript(plan.chapters)
+          onFeedback('展示路线已校验并开始播放，可随时手动接管')
+        } else onFeedback('路线已生成，车辆载入后请点击播放')
+      } else {
+        const response = await requestRag(text, token.signal)
+        if (!gate.current.accepts(token)) return
+        setMessages((old) => [...old.slice(-7), { text, response }])
+        // requestRag validates the entire response before any linked action runs.
+        if (useExperienceStore.getState().modelStatus === 'ready') {
+          for (const result of dispatchVehicleActions(response.linkedActions, 'rag')) onFeedback(result.message)
+        }
       }
     } catch {
-      if (ragGate.current.accepts(token)) setMessages((old) => [...old.slice(-7), {
-        question: text, error: '问答服务暂不可用或响应未通过校验；未执行联动动作，请使用车辆按钮。',
+      if (gate.current.accepts(token)) setMessages((old) => [...old.slice(-7), {
+        text, error: '请求暂不可用或响应未通过校验，未执行联动动作。请重试，或继续使用车辆控制。',
       }])
-    } finally { if (ragGate.current.accepts(token)) setAsking(false) }
+    } finally { if (gate.current.accepts(token)) setBusy(null) }
   }
 
-  const stop = () => {
-    directorGate.current.cancel(); ragGate.current.cancel()
+  useImperativeHandle(ref, () => ({ submitText: (text) => { void submit(text) } }))
+
+  function stop() {
+    gate.current.cancel(); setBusy(null)
     useExperienceStore.getState().interruptPlayback(); useExperienceStore.getState().keepManual()
-    setBusy(false); setAsking(false); onFeedback('已停止，需显式点击播放或恢复才会继续')
+    onFeedback('已停止，由你决定何时播放或恢复')
   }
-  return <aside className="ai-panel" aria-label="AI 导演与知识问答">
-    <section>
-      <p className="eyebrow">YOUR OWN LAUNCH</p><h2>告诉我，你想看什么</h2>
-      <form onSubmit={(e) => { e.preventDefault(); void generate(requirement) }}>
-        <label htmlFor="ai-requirement">展示需求 / 直接指令</label>
-        <textarea id="ai-requirement" value={requirement} maxLength={2000} onChange={(e) => setRequirement(e.target.value)} rows={3} />
-        <div className="ai-examples">
-          <button type="button" onClick={() => setRequirement('一家三口周末出游，重点看看装东西方便不方便。')}>家庭出游</button>
-          <button type="button" onClick={() => setRequirement('来一段有性能感的展示，先看灯光，再看车身。')}>性能与外观</button>
-          <button type="button" onClick={() => setRequirement('不用介绍性能，看看后备箱和车窗就好。')}>只看空间</button>
-        </div>
-        <div className="ai-buttons"><button type="submit">{busy ? '重新生成并播放' : '生成并播放'}</button>
-          <button type="button" onClick={stop}>停止 / 取消</button></div>
-      </form>
-      {busy && <p role="status">正在检索与选择章节…可停止或手动接管</p>}
-      {error && <p role="alert">{error}</p>}
-      {plan && <div className="ai-plan">
-        <SourceMode meta={plan} />
-        <p>{plan.selection.persona === 'family' ? '家庭空间路线' : '性能外观路线'} · {plan.chapters.reduce((n, c) => n + c.durationMs, 0) / 1000} 秒</p>
-        <ol>{plan.chapters.map((c) => <li key={c.id}>{c.title}</li>)}</ol>
+
+  function renderMessage(message: Message) {
+    return <>
+      <h3>{message.text}</h3>
+      {message.error && <p role="alert">{message.error}</p>}
+      {message.response && <>
+        <SourceMode meta={message.response} />
+        <p className="ai-answer">{message.response.answer}</p>
+        <Citations citations={message.response.citations} />
+        <div className="ai-examples">{message.response.suggestedFollowUps.map((question) => <button key={question} onClick={() => void submit(question, 'question')}>{question} ↗</button>)}</div>
+      </>}
+      {message.plan && <>
+        <SourceMode meta={message.plan} />
+        <p>{message.plan.selection.persona === 'family' ? '家庭空间路线' : '性能外观路线'} · {message.plan.chapters.reduce((sum, chapter) => sum + chapter.durationMs, 0) / 1000} 秒</p>
+        <ol>{message.plan.chapters.map((chapter) => <li key={chapter.id}>{chapter.title}</li>)}</ol>
+        <button className="ai-primary" disabled={modelStatus !== 'ready'} onClick={() => useExperienceStore.getState().playScript(message.plan!.chapters)}>从头播放这条路线</button>
+        <details><summary>演示边界</summary>{message.plan.limitations.map((limit) => <p key={limit}>{limit}</p>)}</details>
+        <Citations citations={message.plan.citations} />
+      </>}
+    </>
+  }
+
+  return <>
+    <nav className="exploration-topics" aria-label="探索主题">
+      <h2>你想了解什么？</h2>
+      {explorationTopics.map((item) => <button key={item.id} aria-pressed={topic?.id === item.id} onClick={() => { setTopic(item); setReading('topic') }}>
+        <strong>{item.title}</strong><small>{item.summary}</small><span aria-hidden="true">↗</span>
+      </button>)}
+      <button className="exploration-topics__free" onClick={closeReader}>返回自由探索</button>
+    </nav>
+
+    {reading && <aside className="ai-answer-panel" aria-label="探索详情">
+      <div className="ai-reader-heading"><h2>{reading === 'topic' ? topic?.title : '随行助手'}</h2><button aria-label="收起探索详情" onClick={closeReader}>×</button></div>
+      {reading === 'topic' && topic && <>
+        <h3>{topic.headline}</h3><p>{topic.description}</p>
         <div className="ai-buttons">
-          <button disabled={modelStatus !== 'ready'} onClick={() => useExperienceStore.getState().playScript(plan.chapters)}>从头播放</button>
-          {playback === 'paused' && <button disabled={modelStatus !== 'ready'} onClick={() => useExperienceStore.getState().resumePlayback()}>恢复自动发布会</button>}
+          <button disabled={modelStatus !== 'ready'} onClick={() => {
+            for (const result of dispatchVehicleActions(topic.actions)) onFeedback(result.message)
+          }}>{topic.previewLabel}</button>
+          {topic.id === 'family' && <button disabled={modelStatus !== 'ready'} onClick={() => {
+            for (const result of dispatchVehicleActions([{ type: 'cargo', operation: 'demonstrate', combinationId: 'two_suitcases' }])) onFeedback(result.message)
+          }}>体验双箱装载</button>}
         </div>
-        <details><summary>能力限制</summary>{plan.limitations.map((s) => <p key={s}>{s}</p>)}</details>
-        <Citations citations={plan.citations} />
+        <h3>继续了解</h3>
+        <div className="ai-topic-questions">{topic.questions.map((question) => <button key={question} onClick={() => void submit(question, 'question')}>{question} ↗</button>)}</div>
+        {topic.requirement && <button className="ai-primary" onClick={() => void submit(topic.requirement, 'director')}>带我看一段演示</button>}
+      </>}
+      {reading === 'answer' && <div aria-live="polite">
+        {busy ? <><h3>{pendingText}</h3><p role="status">{busy === 'director' ? '正在选择适合的展示章节…' : '正在检索适用车型的资料…'}</p><button onClick={stop}>取消请求</button></> : latest && renderMessage(latest)}
       </div>}
-    </section>
-    <section className="ai-qa"><h2>问一问这款车</h2>
-      <form onSubmit={(e) => { e.preventDefault(); void ask(question) }}>
-        <label htmlFor="ai-question">产品问题</label>
-        <input id="ai-question" value={question} maxLength={2000} onChange={(e) => setQuestion(e.target.value)} placeholder="后备箱多大？" />
-        <button type="submit">{asking ? '提交新问题' : '提问并联动'}</button>
+      {messages.length > 0 && <details className="ai-history"><summary>最近的问答与路线（{messages.length}）</summary>
+        {messages.map((message, index) => <article key={index}>{renderMessage(message)}</article>)}
+      </details>}
+    </aside>}
+
+    <section className="ai-dock" aria-label="统一文字与语音入口">
+      <form onSubmit={(event) => { event.preventDefault(); void submit(command) }}>
+        <div className="ai-dock__tools">
+          <label htmlFor="assistant-intent">输入用途</label>
+          <select id="assistant-intent" value={intent} onChange={(event) => setIntent(event.target.value as AssistantIntent)}>
+            <option value="auto">自动识别</option><option value="question">了解产品</option><option value="director">编排演示</option>
+          </select>
+          {messages.length > 0 && <button type="button" aria-expanded={reading === 'answer'} onClick={() => setReading(reading === 'answer' ? null : 'answer')}>最近回答</button>}
+          {(busy || playback === 'playing' || playback === 'paused') && <button type="button" onClick={stop}>停止 / 取消</button>}
+        </div>
+        <label className="sr-only" htmlFor="camera-command">产品问题、车辆指令或演示需求</label>
+        <div className="ai-dock__input">
+          <input ref={inputRef} id="camera-command" value={command} maxLength={2000} onChange={(event) => onCommandChange(event.target.value)} placeholder="问产品、打开后备箱，或说“带我看看…”" />
+          <button className="voice-button" type="button" disabled={voiceState === 'unsupported' || voiceState === 'denied'}
+            title={voiceState === 'unsupported' || voiceState === 'denied' ? '麦克风不可用，请使用文字或按钮' : '使用语音输入'}
+            aria-label={voiceState === 'listening' ? '停止语音识别' : '开始语音识别'} onClick={onVoice}>{voiceState === 'listening' ? '识别中' : '语音'}</button>
+          <button className="ai-primary" type="submit" disabled={!command.trim()}>{busy ? '提交新问题' : '发送'}</button>
+        </div>
       </form>
-      {asking && <p role="status">正在检索适用版本的证据…</p>}
-      <div className="ai-messages" aria-live="polite">
-        {messages.map((m, index) => <article key={index}>
-          <h3>{m.question}</h3>
-          {m.error && <p role="alert">{m.error}</p>}
-          {m.response && <>
-            <SourceMode meta={m.response} /><p className="ai-answer">{m.response.answer}</p>
-            <Citations citations={m.response.citations} />
-            <div className="ai-examples">{m.response.suggestedFollowUps.map((q) => <button key={q} onClick={() => void ask(q)}>{q}</button>)}</div>
-          </>}
-        </article>)}
-      </div>
     </section>
-  </aside>
+  </>
 })

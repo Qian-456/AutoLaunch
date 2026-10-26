@@ -2,14 +2,14 @@ import { useEffect, useRef } from 'react'
 import { OrbitControls } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
-import { MOUSE, Vector3 } from 'three'
+import { MOUSE, PerspectiveCamera, Vector3 } from 'three'
 import { su7ConceptPack } from '../pack/su7-concept.pack'
 import { useExperienceStore } from '../store/experience-store'
 import type { OrbitActionDefinition } from '../types'
 
 const smoothStep = (value: number) => value * value * (3 - 2 * value)
 
-export function OrbitCameraRig() {
+export function OrbitCameraRig({ insets = [0, 0, 0, 0] }: { insets?: readonly [number, number, number, number] }) {
   const controlsRef = useRef<OrbitControlsImpl>(null)
   const transition = useRef<null | {
     startedAt: number
@@ -19,7 +19,8 @@ export function OrbitCameraRig() {
     fromTarget: Vector3
     toTarget: Vector3
   }>(null)
-  const { camera, gl } = useThree()
+  const { camera, gl, size } = useThree()
+  const [left, right, top, bottom] = insets
   const playback = useExperienceStore((state) => state.playback)
   const activeOrbitPreset = useExperienceStore((state) => state.activeOrbitPreset)
   const orbitRequestId = useExperienceStore((state) => state.orbitRequestId)
@@ -27,6 +28,13 @@ export function OrbitCameraRig() {
   const beginManualOrbit = useExperienceStore((state) => state.beginManualOrbit)
   const cargoPlacementActive = useExperienceStore((state) => Boolean(state.cargoPlacementSession))
   const definition: OrbitActionDefinition = su7ConceptPack.orbitActions[activeOrbitPreset]
+
+  useEffect(() => {
+    if (!(camera instanceof PerspectiveCamera)) return
+    // Extend the safe viewing area across the full canvas, keeping scenery continuous.
+    camera.setViewOffset(Math.max(1, size.width - left - right), Math.max(1, size.height - top - bottom), -left, -top, size.width, size.height)
+    return () => { camera.clearViewOffset() }
+  }, [camera, size.width, size.height, left, right, top, bottom])
 
   useEffect(() => {
     // Claim control before OrbitControls' pointer listener sees this same event.

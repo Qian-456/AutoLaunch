@@ -654,8 +654,8 @@ export function VehicleModel() {
       setNotice(newPartNodeMissing
         ? PARTS_VIRTUAL_HINT
         : actionNodeMissing
-        ? '⚠ 当前演示模型部分动作节点暂未映射，相关动作将使用降级展示。'
-        : '⚠ 当前模型部分外观节点暂未映射，已跳过对应材质覆盖；核心动作仍可使用。')
+        ? '模型提示：当前演示模型部分动作节点暂未映射，相关动作将使用降级展示。'
+        : '模型提示：当前模型部分外观节点暂未映射，已跳过对应材质覆盖；核心动作仍可使用。')
     }
     scene.traverse((object) => {
       object.castShadow = false
@@ -1007,8 +1007,8 @@ export function VehicleModel() {
         <Html
           position={hoverVisual.point}
           center
-          zIndexRange={[20, 10]}
-          style={{ pointerEvents: 'none' }}
+          zIndexRange={[2, 1]}
+          style={{ pointerEvents: 'none', width: 'max-content', whiteSpace: 'nowrap' }}
         >
           <div className="vehicle-hover-anchor">
             <div className="vehicle-hover-label">{hoverVisual.label}</div>
