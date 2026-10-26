@@ -39,6 +39,7 @@ export const AiPanel = forwardRef<AiPanelHandle, Props>(function AiPanel({ comma
   const [pendingText, setPendingText] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
+  const settingsRef = useRef<HTMLDetailsElement>(null)
   const gate = useRef(new RequestGate(() => useExperienceStore.getState().controlEpoch))
   const playback = useExperienceStore((state) => state.playback)
   const modelStatus = useExperienceStore((state) => state.modelStatus)
@@ -59,10 +60,19 @@ export const AiPanel = forwardRef<AiPanelHandle, Props>(function AiPanel({ comma
 
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && reading) closeReader()
+      if (event.key !== 'Escape') return
+      if (settingsRef.current?.open) {
+        settingsRef.current.open = false
+        settingsRef.current.querySelector('summary')?.focus()
+        event.preventDefault()
+      } else if (reading) closeReader()
+    }
+    const dismissSettings = (event: PointerEvent) => {
+      if (settingsRef.current?.open && !settingsRef.current.contains(event.target as Node)) settingsRef.current.open = false
     }
     window.addEventListener('keydown', keydown)
-    return () => window.removeEventListener('keydown', keydown)
+    window.addEventListener('pointerdown', dismissSettings)
+    return () => { window.removeEventListener('keydown', keydown); window.removeEventListener('pointerdown', dismissSettings) }
   }, [reading])
 
   async function submit(text: string, purpose: AssistantIntent = intent) {
@@ -165,21 +175,40 @@ export const AiPanel = forwardRef<AiPanelHandle, Props>(function AiPanel({ comma
 
     <section className="ai-dock" aria-label="统一文字与语音入口">
       <form onSubmit={(event) => { event.preventDefault(); void submit(command) }}>
-        <div className="ai-dock__tools">
-          <label htmlFor="assistant-intent">输入用途</label>
-          <select id="assistant-intent" value={intent} onChange={(event) => setIntent(event.target.value as AssistantIntent)}>
-            <option value="auto">自动识别</option><option value="question">了解产品</option><option value="director">编排演示</option>
-          </select>
-          {messages.length > 0 && <button type="button" aria-expanded={reading === 'answer'} onClick={() => setReading(reading === 'answer' ? null : 'answer')}>最近回答</button>}
-          {(busy || playback === 'playing' || playback === 'paused') && <button type="button" onClick={stop}>停止 / 取消</button>}
-        </div>
         <label className="sr-only" htmlFor="camera-command">产品问题、车辆指令或演示需求</label>
         <div className="ai-dock__input">
-          <input ref={inputRef} id="camera-command" value={command} maxLength={2000} onChange={(event) => onCommandChange(event.target.value)} placeholder="问产品、打开后备箱，或说“带我看看…”" />
+          <button className="ai-dock__history" type="button" aria-label="查看最近回答" title={messages.length ? '查看最近回答' : '随行助手'} disabled={!messages.length}
+            aria-expanded={reading === 'answer'} onClick={() => setReading(reading === 'answer' ? null : 'answer')}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-6 4V6a2 2 0 0 1 2-2Z" /><path d="M7 9h10M7 13h6" /></svg>
+          </button>
+          <input ref={inputRef} id="camera-command" value={command} maxLength={2000} onChange={(event) => onCommandChange(event.target.value)} placeholder="问问这辆车，或带我看一段演示…" />
+          <details ref={settingsRef} className="ai-input-settings">
+            <summary aria-label="调整输入方式" title="调整输入方式" data-mode={intent}>
+              {intent === 'auto' ? <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16" /><circle cx="9" cy="7" r="2.5" /><circle cx="15" cy="17" r="2.5" /></svg> : <span>{intent === 'question' ? '问答' : '演示'}</span>}
+            </summary>
+            <div>
+              <label htmlFor="assistant-intent">处理方式</label>
+              <select id="assistant-intent" value={intent} onChange={(event) => {
+                setIntent(event.target.value as AssistantIntent)
+                if (settingsRef.current) settingsRef.current.open = false
+                inputRef.current?.focus()
+              }}>
+                <option value="auto">自动识别</option><option value="question">了解产品</option><option value="director">编排演示</option>
+              </select>
+              <p>默认自动理解。识别不符合预期时，可在这里指定。</p>
+            </div>
+          </details>
+          {(busy || playback === 'playing' || playback === 'paused') && <button type="button" aria-label="停止 / 取消" title="停止 / 取消" onClick={stop}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+          </button>}
           <button className="voice-button" type="button" disabled={voiceState === 'unsupported' || voiceState === 'denied'}
             title={voiceState === 'unsupported' || voiceState === 'denied' ? '麦克风不可用，请使用文字或按钮' : '使用语音输入'}
-            aria-label={voiceState === 'listening' ? '停止语音识别' : '开始语音识别'} onClick={onVoice}>{voiceState === 'listening' ? '识别中' : '语音'}</button>
-          <button className="ai-primary" type="submit" disabled={!command.trim()}>{busy ? '提交新问题' : '发送'}</button>
+            aria-label={voiceState === 'listening' ? '停止语音识别' : '开始语音识别'} aria-pressed={voiceState === 'listening'} onClick={onVoice}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M6 10v2a6 6 0 0 0 12 0v-2M12 18v3M9 21h6" /></svg>
+          </button>
+          <button className="ai-primary ai-dock__send" type="submit" disabled={!command.trim()} aria-label={busy ? '提交新问题' : '发送'} title={busy ? '提交新问题' : '发送'}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 11 6-6 6 6M12 5v15" /></svg>
+          </button>
         </div>
       </form>
     </section>

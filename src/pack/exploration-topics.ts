@@ -20,7 +20,7 @@ export const explorationTopics = [
     requirement: '一家三口周末出游，请演示后备箱与双箱装载。',
   },
   {
-    id: 'comfort', title: '舒适与日常', summary: '上下车、乘坐空间与待确认项',
+    id: 'comfort', title: '舒适与日常', summary: '上下车、车窗与乘坐空间',
     headline: '把舒适拆成具体的问题。',
     description: '从侧面观察上下车与车窗操作，再查阅适用资料。座椅感受、后排实测和隔音仍需相应证据或实际试乘，不能从开窗动画推断。',
     questions: ['后排空间有哪些适用资料？', '当前模型能演示哪些车窗操作？'],

@@ -333,7 +333,7 @@ export function App() {
           <Canvas
             shadows
             dpr={[1, 1.5]}
-            camera={{ position: [-6.25, 2.25, 4.6], fov: 32, near: 0.1, far: 100 }}
+            camera={{ position: [-6.25, 2.25, 4.6], fov: 28, near: 0.1, far: 500 }}
             gl={{
               antialias: true,
               alpha: false,
@@ -345,7 +345,7 @@ export function App() {
           >
             <Experience
               environment={environment}
-              viewInsets={aiEnabled ? [isControlPanelOpen || isPropWarehouseOpen ? 425 : 245, isAiReading && !isControlPanelOpen && !isPropWarehouseOpen ? 375 : 32, 105, 180] : undefined}
+              viewInsets={aiEnabled ? [isControlPanelOpen || isPropWarehouseOpen ? 425 : 245, isAiReading && !isControlPanelOpen && !isPropWarehouseOpen ? 375 : 32, 90, 125] : undefined}
               onPropLoadError={handlePropLoadError}
               onCargoFeedback={setFeedback}
             />
@@ -677,6 +677,7 @@ export function App() {
           来源：<a href={su7ConceptPack.attribution.sourceUrl} target="_blank" rel="noreferrer">Sketchfab</a>
           {' · '}
           <a href={su7ConceptPack.attribution.licenseUrl} target="_blank" rel="noreferrer">{su7ConceptPack.attribution.license}</a>
+          {' · 场景：'}<a href="https://polyhaven.com" target="_blank" rel="noreferrer">Poly Haven · CC0</a>
         </span>
       </footer>
     </main>

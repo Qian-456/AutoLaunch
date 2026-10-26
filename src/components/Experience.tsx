@@ -1,5 +1,5 @@
 import { Component, Suspense, useCallback, useEffect, useMemo, useRef, type ErrorInfo, type ReactNode } from 'react'
-import { ContactShadows, Edges, Html } from '@react-three/drei'
+import { Edges, Html } from '@react-three/drei'
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import { BufferGeometry, DoubleSide, Float32BufferAttribute, MathUtils, Object3D, PointLight, SpotLight } from 'three'
 import { VehicleModel } from './VehicleModel'
@@ -10,13 +10,8 @@ import { findProp } from '../props/prop-catalog'
 import { candidateAtPosition } from '../runtime/cargo-layout'
 import { dispatchVehicleAction } from '../runtime/action-dispatcher'
 import { su7ConceptPack } from '../pack/su7-concept.pack'
-
-export const showroomEnvironments = {
-  studio: { label: '光之展廊', sky: '#d9d9d3', floor: '#b4b5ac', key: '#fff8e8', fill: '#e9efff' },
-  circuit: { label: '夜间赛道', sky: '#101211', floor: '#232725', key: '#fff8e8', fill: '#91b9ff' },
-  sunset: { label: '日落旷野', sky: '#cba996', floor: '#aa8d73', key: '#ffdab0', fill: '#f6e7da' },
-} as const
-export type ShowroomEnvironment = keyof typeof showroomEnvironments
+import { ShowroomEnvironment, type ShowroomEnvironment as ShowroomEnvironmentId } from './ShowroomEnvironment'
+export { showroomEnvironments, type ShowroomEnvironment } from './ShowroomEnvironment'
 
 class PropDisplayBoundary extends Component<{
   children: ReactNode
@@ -228,13 +223,12 @@ export function Experience({
   onPropLoadError,
   onCargoFeedback,
 }: {
-  environment?: ShowroomEnvironment
+  environment?: ShowroomEnvironmentId
   viewInsets?: readonly [number, number, number, number]
   onPropLoadError: (assetId: string) => void
   onCargoFeedback: (message: string) => void
 }) {
   const stageMode = useExperienceStore((state) => state.stageMode)
-  const setting = showroomEnvironments[environment]
   const cargoPlacements = useExperienceStore((state) => state.cargoPlacements)
   const selectedInstanceId = useExperienceStore((state) => state.selectedCargoInstanceId)
   const sessionInstanceId = useExperienceStore((state) => state.cargoPlacementSession?.instanceId)
@@ -242,14 +236,7 @@ export function Experience({
 
   return (
     <>
-      <color attach="background" args={[setting.sky]} />
-      <fog attach="fog" args={[setting.sky, 16, 36]} />
-      <ambientLight intensity={environment === 'circuit' ? 0.82 : 1.4} />
-      <hemisphereLight args={['#ffffff', setting.floor, environment === 'circuit' ? 0.4 : 1.6]} />
-      <directionalLight castShadow position={[4, 8, 6]} intensity={2.35} color={setting.key} shadow-mapSize={[1024, 1024]} />
-      <directionalLight position={[-5, 3, -4]} intensity={1.35} color={setting.fill} />
-      <spotLight position={[0, 6, -5]} intensity={3.2} angle={0.55} penumbra={0.8} color="#ffd15c" />
-      <pointLight position={[1.45, 1.65, 0]} intensity={1.8} distance={2.6} decay={1.8} color="#e8fff9" />
+      <ShowroomEnvironment environment={environment} onError={onCargoFeedback} />
       <CargoInteriorLights />
       <Suspense fallback={null}><VehicleModel /></Suspense>
       {[...cargoPlacements.values()]
@@ -278,25 +265,10 @@ export function Experience({
           <meshBasicMaterial color="#000000" transparent opacity={0.22} depthWrite={false} polygonOffset polygonOffsetFactor={-1} />
         </mesh>
       ))}
-      <ContactShadows key={environment} position={[0, -0.015, 0]} opacity={0.6} scale={12} blur={2.6} far={5} frames={3} />
-      {environment === 'studio' && [-7, 0, 7].map((x) => <mesh key={x} position={[x, 3.5, -10]}>
-        <boxGeometry args={[0.7, 8, 0.7]} /><meshStandardMaterial color="#efefe8" roughness={0.9} />
-      </mesh>)}
-      {environment === 'circuit' && Array.from({ length: 14 }, (_, index) => <mesh key={index} position={[-10 + index * 1.5, -0.005, -4]}>
-        <boxGeometry args={[1.5, 0.04, 0.4]} /><meshStandardMaterial color={index % 2 ? '#e4e2d8' : '#d85e47'} />
-      </mesh>)}
-      {environment === 'sunset' && <group>
-        <mesh position={[0, 3, -17]}><sphereGeometry args={[2.2, 32, 20]} /><meshBasicMaterial color="#f5d5aa" /></mesh>
-        {[-12, 0, 12].map((x) => <mesh key={x} position={[x, -2, -20]} scale={[2, 0.6, 1]}>
-          <sphereGeometry args={[5, 24, 12]} /><meshStandardMaterial color="#b0977e" roughness={1} />
-        </mesh>)}
-      </group>}
-      {stageMode === 'launch' ? <LaunchStage /> : (
-        <mesh rotation-x={-Math.PI / 2} position-y={-0.03} receiveShadow>
-          <planeGeometry args={[120, 120]} />
-          <meshStandardMaterial color={setting.floor} roughness={0.8} metalness={0.1} />
-        </mesh>
-      )}
+      <mesh rotation-x={-Math.PI / 2} position-y={-0.012} receiveShadow>
+        <planeGeometry args={[100, 100]} /><shadowMaterial transparent opacity={0.35} depthWrite={false} />
+      </mesh>
+      {stageMode === 'launch' && <LaunchStage />}
       <OrbitCameraRig insets={viewInsets} />
     </>
   )
