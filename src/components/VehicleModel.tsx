@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Html, Outlines, useGLTF } from '@react-three/drei'
 import { createPortal, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
-import { Box3, BoxGeometry, Color, Group, Matrix3, MathUtils, Mesh, MeshBasicMaterial, MeshPhysicalMaterial, MeshStandardMaterial, Object3D, Raycaster, Vector3 } from 'three'
+import { Box3, BoxGeometry, Color, Group, Matrix3, MathUtils, Mesh, MeshBasicMaterial, MeshPhysicalMaterial, MeshStandardMaterial, Object3D, Raycaster, SRGBColorSpace, Texture, TextureLoader, Vector3 } from 'three'
 import { SkeletonUtils } from 'three/examples/jsm/Addons.js'
 import { KTX2Loader, type GLTFLoader } from 'three-stdlib'
 import {
@@ -13,6 +13,7 @@ import {
   WINDOW_LABELS,
   su7ConceptPack,
   type PaintOptionId,
+  type SeatOptionId,
   type WindowActionDefinition,
   type DoorActionDefinition,
 } from '../pack/su7-concept.pack'
@@ -460,8 +461,9 @@ export function buildDoorRefs(scene: Object3D, vehicleRoot: Group): Record<Exclu
   return refs
 }
 
-export function VehicleModel({ paint = 'original' }: { paint?: PaintOptionId }) {
-  const paintUniforms = useMemo(() => ({ color: { value: new Color() }, blend: { value: 0 } }), [])
+export function VehicleModel({ paint = 'original', seats = 'yellow' }: { paint?: PaintOptionId; seats?: SeatOptionId }) {
+  const paintUniforms = useMemo(() => ({ color: { value: new Color() }, blend: { value: 1 }, keepLivery: { value: 1 } }), [])
+  const seatUniforms = useMemo(() => ({ color: { value: new Color() }, blend: { value: 1 } }), [])
   const renderer = useThree((state) => state.gl)
   const configureLoader = useCallback((loader: GLTFLoader) => {
     const ktx2Loader = new KTX2Loader()
@@ -660,6 +662,13 @@ export function VehicleModel({ paint = 'original' }: { paint?: PaintOptionId }) 
         ? '模型提示：当前演示模型部分动作节点暂未映射，相关动作将使用降级展示。'
         : '模型提示：当前模型部分外观节点暂未映射，已跳过对应材质覆盖；核心动作仍可使用。')
     }
+    const headlightCovers = new Set<Object3D>()
+    const restoredSeatMaps: Texture[] = []
+    const seatTextureLoader = new TextureLoader()
+    let disposed = false
+    su7ConceptPack.appearance.headlightCover.semanticIds.forEach((id) => {
+      scene.getObjectByName(su7ConceptPack.nodeMap[id])?.traverse((object) => headlightCovers.add(object))
+    })
     scene.traverse((object) => {
       object.castShadow = false
       object.receiveShadow = false
@@ -726,7 +735,35 @@ export function VehicleModel({ paint = 'original' }: { paint?: PaintOptionId }) 
           material.vertexColors = false
           material.needsUpdate = true
         }
+        if (headlightCovers.has(object) && material instanceof MeshPhysicalMaterial) {
+          const cover = su7ConceptPack.appearance.headlightCover
+          material.color.set(cover.color)
+          material.opacity = cover.opacity
+          material.roughness = cover.roughness
+          material.clearcoat = cover.clearcoat
+          material.clearcoatRoughness = cover.clearcoatRoughness
+          material.envMapIntensity = cover.envMapIntensity
+          material.emissive.set('#000000')
+          material.emissiveIntensity = 0
+          material.depthWrite = false
+          material.needsUpdate = true
+        }
         if (material.name === su7ConceptPack.appearance.paint.material) bindPaintAppearance(material, paintUniforms)
+        const seatIndex = su7ConceptPack.appearance.seats.materials.findIndex((name) => name === material.name)
+        if (seatIndex >= 0) {
+          bindPaintAppearance(material, seatUniforms)
+          seatTextureLoader.load(su7ConceptPack.appearance.seats.colorMaps[seatIndex], (map) => {
+            if (disposed) { map.dispose(); return }
+            map.flipY = false
+            map.colorSpace = SRGBColorSpace
+            map.anisotropy = maximumAnisotropy
+            material.map = map
+            material.needsUpdate = true
+            restoredSeatMaps.push(map)
+          }, undefined, () => {
+            if (!disposed) setNotice('座椅细节贴图暂未加载，已保留模型自带材质。')
+          })
+        }
         return material
       })
       mesh.material = Array.isArray(mesh.material) ? clonedMaterials : clonedMaterials[0]
@@ -744,6 +781,8 @@ export function VehicleModel({ paint = 'original' }: { paint?: PaintOptionId }) 
     }
     setModelStatus('ready')
     return () => {
+      disposed = true
+      restoredSeatMaps.forEach((map) => map.dispose())
       windowHitTargets.current.forEach((target) => {
         target.removeFromParent()
         target.geometry.dispose()
@@ -754,13 +793,18 @@ export function VehicleModel({ paint = 'original' }: { paint?: PaintOptionId }) 
       windowHitTargets.current = []
       renderer.domElement.style.cursor = 'grab'
     }
-  }, [renderer, scene, setModelStatus, setNotice, paintUniforms])
+  }, [renderer, scene, setModelStatus, setNotice, paintUniforms, seatUniforms])
 
   useEffect(() => {
     const option = su7ConceptPack.appearance.paint.options.find((item) => item.id === paint)!
     paintUniforms.color.value.set(option.color)
-    paintUniforms.blend.value = paint === 'original' ? 0 : 1
+    paintUniforms.keepLivery.value = paint === 'original' ? 1 : 0
   }, [paint, paintUniforms])
+
+  useEffect(() => {
+    seatUniforms.color.value.set(su7ConceptPack.appearance.seats.options.find((item) => item.id === seats)!.color)
+    seatUniforms.blend.value = seats === 'yellow' ? 0 : 1
+  }, [seats, seatUniforms])
 
   useEffect(() => {
     for (const id of runtimeAnimations.current.keys()) {

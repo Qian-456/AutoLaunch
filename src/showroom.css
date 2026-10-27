@@ -2,10 +2,19 @@
 .vehicle-viewport { position: absolute; inset: 0; }
 .paint-picker { position: absolute; z-index: 3; left: 32px; bottom: 108px; width: 205px; }
 .paint-picker p { margin: 0 0 8px; color: #d0d6dc; font-size: 12px; }
-.paint-picker > div { display: flex; gap: 8px; }
+.paint-picker > div { display: flex; gap: 5px; }
 .paint-picker button { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid transparent; border-radius: 50%; background: #151c24bd; }
 .paint-picker button[aria-pressed=true] { border-color: #d6e1ea; }
 .paint-picker button span { width: 22px; height: 22px; border-radius: 50%; border: 1px solid #ffffff20; }
+.seat-picker { position: relative; margin-top: 9px; font-size: 12px; color: #d0d6dc; }
+.seat-picker summary { display: flex; justify-content: space-between; padding: 5px 1px; cursor: pointer; list-style: none; }
+.seat-picker summary::-webkit-details-marker { display: none; }
+.seat-picker summary span { color: #9baab6; }
+.seat-picker__panel { position: absolute; bottom: calc(100% + 12px); left: 0; width: 240px; padding: 16px; border: 1px solid #ffffff26; border-radius: 10px; background: #171f28fa; box-shadow: 0 12px 40px #0005; }
+.seat-picker__panel > div { display: flex; gap: 6px; margin: 12px 0; }
+.seat-picker__panel button { width: auto; height: auto; padding: 9px; border-radius: 5px; font-size: 12px; color: #e0e6eb; }
+.seat-picker__panel small, .seat-picker__panel a { display: block; margin-top: 9px; font-size: 11px; line-height: 1.6; color: #a5b4c0; }
+.seat-picker__panel a { color: #d6d3c6; }
 .stage--controls-open .paint-picker { visibility: hidden; pointer-events: none; }
 .environment-loading { padding: 10px 16px; color: #e3e9ee; border-radius: 8px; background: #171f28f5; font-size: 13px; white-space: nowrap; }
 .stage { --stage-ink: #f0f2f4; color: var(--stage-ink); }
@@ -109,6 +118,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
   .exploration-topics small { margin-top: 5px; }
   .exploration-topics .exploration-topics__free { min-height: 32px; margin-top: 8px; }
   .paint-picker { bottom: 96px; }
+}
+@media (max-height: 740px) {
+  .exploration-topics { top: 104px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition-duration: 0ms !important; }

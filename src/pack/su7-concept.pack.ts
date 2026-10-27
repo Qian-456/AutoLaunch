@@ -4,12 +4,19 @@ import type { PropId } from '../props/prop-catalog'
 type ConcreteDoorTarget = Exclude<DoorTarget, 'all'>
 
 export const paintOptions = [
-  { id: 'original', label: '原色黄', color: '#cbb32e' },
-  { id: 'titanium', label: '钛银', color: '#c6cdd1' },
-  { id: 'graphite', label: '石墨灰', color: '#56616a' },
-  { id: 'ocean', label: '深海蓝', color: '#42657d' },
+  { id: 'original', label: '闪电黄', color: '#ffc21c' },
+  { id: 'space-silver', label: '太空银', color: '#b8bec6' },
+  { id: 'parrot-green', label: '鹦鹉绿', color: '#007b72' },
+  { id: 'pearl-white', label: '珍珠白', color: '#eeeae1' },
+  { id: 'obsidian-black', label: '曜石黑', color: '#15171b' },
 ] as const
 export type PaintOptionId = (typeof paintOptions)[number]['id']
+export const seatOptions = [
+  { id: 'yellow', label: '黑 / 黄', color: '#e7b42b' },
+  { id: 'red', label: '黑 / 红', color: '#a52a33' },
+  { id: 'graphite', label: '黑 / 灰', color: '#62676d' },
+] as const
+export type SeatOptionId = (typeof seatOptions)[number]['id']
 
 const degreesToRadians = (degrees: number) => degrees * Math.PI / 180
 const configuredAngle = (value: string | undefined, fallback: number) => {
@@ -420,9 +427,9 @@ export const su7ConceptPack = {
     lights_headlight: {
       durationMs: 420,
       conflictGroup: 'lights_front',
-      color: '#cce7ff',
-      emissiveIntensity: [0, 5] as const,
-      lensEmissiveIntensity: [0, 0.65] as const,
+      color: '#f4f7ff',
+      emissiveIntensity: [0, 7] as const,
+      lensEmissiveIntensity: [0, 0] as const,
       emissiveNodes: [
         'XiaomicarLightPlastic_Chroming_1_1__carLightPlastic_Chroming_1_001_lambert230_Light_Chroaming_0',
         'XiaomicarLightPlastic_Chroming_2_1__carLightPlastic_Chroming_2_001_lambert230_Light_Chroaming_0',
@@ -480,7 +487,21 @@ export const su7ConceptPack = {
     },
   },
   appearance: {
+    reference: {
+      modelYear: 2025,
+      url: 'https://www.xiaomiev.com/ultra',
+      note: 'Five exterior colours visually approximated from Xiaomi SU7 Ultra official 2025 launch imagery, not measured factory paint values. Yellow retains its silver livery; other colours use an unstriped finish. Seat accents are demo customisations on the existing mesh, not a factory configurator.',
+    },
     paint: { material: 'CarPaint', options: paintOptions },
+    seats: {
+      materials: ['Seat_Texture', 'Rear_Seat_Texture'], options: seatOptions,
+      colorMaps: ['/assets/vehicle/seat-front-original.png', '/assets/vehicle/seat-rear-original.png'],
+    },
+    headlightCover: {
+      semanticIds: ['headlight_left', 'headlight_right'] as const,
+      color: '#ffffff', opacity: 0.12, roughness: 0.03,
+      clearcoat: 0.2, clearcoatRoughness: 0.03, envMapIntensity: 0.3,
+    },
     /** Only visually dominant exterior materials participate in shadow maps. */
     shadowCasterMaterials: ['CarPaint', 'Roof', 'tire', 'RIM_1', 'Color_rim'],
     shadowReceiverMaterials: ['CarPaint', 'Roof', 'tire'],
@@ -506,6 +527,8 @@ export const su7ConceptPack = {
         note: 'Keep the native paint/decal map; a restrained neutral tint and dielectric clearcoat replace the previous full-white boost. Concept recolours affect yellow paint only.',
       },
       { material: 'Windows', color: '#020305', metalness: 0.0, roughness: 0.2, removeColorMap: true },
+      { material: 'Seat_Texture', color: '#ffffff', metalness: 0, roughness: 0.86, removeColorMap: false },
+      { material: 'Rear_Seat_Texture', color: '#ffffff', metalness: 0, roughness: 0.86, removeColorMap: false },
       { material: 'Brilliant_Black', color: '#050608', metalness: 0.04, roughness: 0.56, removeColorMap: true },
       { material: 'BrilliantGray', color: '#050608', metalness: 0.04, roughness: 0.6, removeColorMap: true },
       { material: 'Brilliant_Silver', color: '#050608', metalness: 0.04, roughness: 0.6, removeColorMap: true },

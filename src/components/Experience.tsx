@@ -9,7 +9,7 @@ import { CargoGhost, PropDisplay } from './PropDisplay'
 import { findProp } from '../props/prop-catalog'
 import { candidateAtPosition } from '../runtime/cargo-layout'
 import { dispatchVehicleAction } from '../runtime/action-dispatcher'
-import { su7ConceptPack, type PaintOptionId } from '../pack/su7-concept.pack'
+import { su7ConceptPack, type PaintOptionId, type SeatOptionId } from '../pack/su7-concept.pack'
 import { ShowroomEnvironment, type ShowroomEnvironment as ShowroomEnvironmentId } from './ShowroomEnvironment'
 export { showroomEnvironments, type ShowroomEnvironment } from './ShowroomEnvironment'
 
@@ -220,12 +220,14 @@ function CargoPlacementController({ onFeedback }: { onFeedback: (message: string
 export function Experience({
   environment = 'studio',
   paint = 'original',
+  seats = 'yellow',
   viewInsets,
   onPropLoadError,
   onCargoFeedback,
 }: {
   environment?: ShowroomEnvironmentId
   paint?: PaintOptionId
+  seats?: SeatOptionId
   viewInsets?: readonly [number, number, number, number]
   onPropLoadError: (assetId: string) => void
   onCargoFeedback: (message: string) => void
@@ -240,7 +242,7 @@ export function Experience({
     <>
       <ShowroomEnvironment environment={environment} onError={onCargoFeedback} />
       <CargoInteriorLights />
-      <Suspense fallback={null}><VehicleModel paint={paint} /></Suspense>
+      <Suspense fallback={null}><VehicleModel paint={paint} seats={seats} /></Suspense>
       {[...cargoPlacements.values()]
         .filter((placement) => placement.instanceId !== sessionInstanceId)
         .map((placement) => {

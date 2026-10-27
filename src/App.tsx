@@ -4,7 +4,7 @@ import { useProgress } from '@react-three/drei'
 import { ACESFilmicToneMapping, SRGBColorSpace } from 'three'
 import { Experience, showroomEnvironments, type ShowroomEnvironment } from './components/Experience'
 import { LaunchPlayer } from './components/LaunchPlayer'
-import { DOOR_LABELS, DOOR_TARGETS, paintOptions, su7ConceptPack, WINDOW_LABELS, WINDOW_TARGETS, type PaintOptionId } from './pack/su7-concept.pack'
+import { DOOR_LABELS, DOOR_TARGETS, paintOptions, seatOptions, su7ConceptPack, WINDOW_LABELS, WINDOW_TARGETS, type PaintOptionId, type SeatOptionId } from './pack/su7-concept.pack'
 import { routeInput } from './runtime/input-router'
 import { AiPanel, type AiPanelHandle } from './components/AiPanel'
 import { dispatchVehicleAction } from './runtime/action-dispatcher'
@@ -74,7 +74,8 @@ export function App() {
   const [propLoadError, setPropLoadError] = useState<PropId | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [environment, setEnvironment] = useState<ShowroomEnvironment>('studio')
-  const [paint, setPaint] = useState<PaintOptionId>('titanium')
+  const [paint, setPaint] = useState<PaintOptionId>('original')
+  const [seats, setSeats] = useState<SeatOptionId>('yellow')
   const [isAiReading, setIsAiReading] = useState(false)
   const [feedback, setFeedback] = useState('拖动车身区域可自由旋转 · 滚轮缩放 · 文字可输入：主驾车窗50%')
   const { progress: loadingProgress } = useProgress()
@@ -347,6 +348,7 @@ export function App() {
             <Experience
               environment={environment}
               paint={paint}
+              seats={seats}
               viewInsets={aiEnabled ? [isControlPanelOpen || isPropWarehouseOpen ? 425 : 245, isAiReading && !isControlPanelOpen && !isPropWarehouseOpen ? 375 : 32, 90, 125] : undefined}
               onPropLoadError={handlePropLoadError}
               onCargoFeedback={setFeedback}
@@ -364,12 +366,23 @@ export function App() {
           {(Object.keys(showroomEnvironments) as ShowroomEnvironment[]).map((id) => <button key={id} type="button" aria-pressed={environment === id} onClick={() => setEnvironment(id)}>{showroomEnvironments[id].label}</button>)}
         </div>
 
-        <div className="paint-picker" role="group" aria-label="概念车漆">
-          <p>概念车漆 · {paintOptions.find((option) => option.id === paint)!.label}</p>
+        <div className="paint-picker" role="group" aria-label="车漆配色">
+          <p>车漆 · {paintOptions.find((option) => option.id === paint)!.label}</p>
           <div>{paintOptions.map((option) => <button key={option.id} type="button" title={option.label}
-            aria-label={`概念车漆：${option.label}`} aria-pressed={paint === option.id} onClick={() => setPaint(option.id)}>
+            aria-label={`车漆：${option.label}`} aria-pressed={paint === option.id} onClick={() => setPaint(option.id)}>
             <span style={{ backgroundColor: option.color }} aria-hidden="true" />
           </button>)}</div>
+          <details className="seat-picker">
+            <summary>座椅 · {seatOptions.find((option) => option.id === seats)!.label}<span>＋</span></summary>
+            <div className="seat-picker__panel">
+              <p>座椅点缀色</p>
+              <div role="group" aria-label="座椅点缀色">{seatOptions.map((option) => <button key={option.id} type="button"
+                aria-pressed={seats === option.id} onClick={() => setSeats(option.id)}>{option.label}</button>)}</div>
+              <small>演示自定义 · 保留现有座椅造型</small>
+              <a href={su7ConceptPack.appearance.reference.url} target="_blank" rel="noreferrer">车漆参考：小米汽车官网 ↗</a>
+              <small>颜色为视觉近似，具体配置以实车为准。</small>
+            </div>
+          </details>
         </div>
 
         {modelStatus === 'loading' && (
