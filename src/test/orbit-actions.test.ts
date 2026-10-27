@@ -410,8 +410,9 @@ describe('registered VehicleAction pipeline', () => {
     expect(su7ConceptPack.appearance.hiddenNodes).toContain('XiaomicarPlate_carPlate_aaa_Details_0')
     expect(su7ConceptPack.appearance.plates.map((plate) => plate.id)).toEqual(['front', 'rear'])
     expect(su7ConceptPack.appearance.materialOverrides.find((item) => item.material === 'CarPaint')).toMatchObject({
-      color: '#ffffff',
+      color: '#d8d8d2',
       removeColorMap: false,
+      clearcoat: 0.85,
     })
     expect(su7ConceptPack.actions.window_driver_front).toMatchObject({ durationMs: 900, conflictGroup: 'window_driver_front' })
     expect(su7ConceptPack.actions.lights_headlight.conflictGroup).toBe('lights_front')

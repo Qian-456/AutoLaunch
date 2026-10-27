@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Html, Outlines, useGLTF } from '@react-three/drei'
 import { createPortal, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
-import { Box3, BoxGeometry, Color, Group, Matrix3, MathUtils, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, Raycaster, Vector3 } from 'three'
+import { Box3, BoxGeometry, Color, Group, Matrix3, MathUtils, Mesh, MeshBasicMaterial, MeshPhysicalMaterial, MeshStandardMaterial, Object3D, Raycaster, Vector3 } from 'three'
 import { SkeletonUtils } from 'three/examples/jsm/Addons.js'
 import { KTX2Loader, type GLTFLoader } from 'three-stdlib'
 import {
@@ -12,6 +12,7 @@ import {
   WINDOW_TARGETS,
   WINDOW_LABELS,
   su7ConceptPack,
+  type PaintOptionId,
   type WindowActionDefinition,
   type DoorActionDefinition,
 } from '../pack/su7-concept.pack'
@@ -19,6 +20,7 @@ import { useExperienceStore } from '../store/experience-store'
 import type { ActiveVehicleAction, DoorTarget, WindowTarget } from '../types'
 import { dispatchVehicleAction } from '../runtime/action-dispatcher'
 import { registerCargoSurfaceSampler } from '../runtime/cargo-surface'
+import { bindPaintAppearance } from '../runtime/paint-appearance'
 import {
   resolveVehicleTargetFromIntersections,
   type VehicleHitTarget,
@@ -458,7 +460,8 @@ export function buildDoorRefs(scene: Object3D, vehicleRoot: Group): Record<Exclu
   return refs
 }
 
-export function VehicleModel() {
+export function VehicleModel({ paint = 'original' }: { paint?: PaintOptionId }) {
+  const paintUniforms = useMemo(() => ({ color: { value: new Color() }, blend: { value: 0 } }), [])
   const renderer = useThree((state) => state.gl)
   const configureLoader = useCallback((loader: GLTFLoader) => {
     const ktx2Loader = new KTX2Loader()
@@ -679,6 +682,11 @@ export function VehicleModel() {
           material.color = new Color(override.color)
           material.metalness = override.metalness
           material.roughness = override.roughness
+          if ('clearcoat' in override && material instanceof MeshPhysicalMaterial) {
+            material.clearcoat = override.clearcoat
+            material.clearcoatRoughness = override.clearcoatRoughness
+            material.specularIntensity = override.specularIntensity
+          }
           if ('removeColorMap' in override && override.removeColorMap) {
             material.map = null
             material.emissive.set('#000000')
@@ -718,6 +726,7 @@ export function VehicleModel() {
           material.vertexColors = false
           material.needsUpdate = true
         }
+        if (material.name === su7ConceptPack.appearance.paint.material) bindPaintAppearance(material, paintUniforms)
         return material
       })
       mesh.material = Array.isArray(mesh.material) ? clonedMaterials : clonedMaterials[0]
@@ -745,7 +754,13 @@ export function VehicleModel() {
       windowHitTargets.current = []
       renderer.domElement.style.cursor = 'grab'
     }
-  }, [renderer, scene, setModelStatus, setNotice])
+  }, [renderer, scene, setModelStatus, setNotice, paintUniforms])
+
+  useEffect(() => {
+    const option = su7ConceptPack.appearance.paint.options.find((item) => item.id === paint)!
+    paintUniforms.color.value.set(option.color)
+    paintUniforms.blend.value = paint === 'original' ? 0 : 1
+  }, [paint, paintUniforms])
 
   useEffect(() => {
     for (const id of runtimeAnimations.current.keys()) {

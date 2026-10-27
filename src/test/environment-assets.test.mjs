@@ -20,6 +20,6 @@ it('ships every environment asset with verified bytes and provenance', () => {
   }
 })
 
-it('keeps the full local environment library below 10 MiB', () => {
-  expect(manifest.assets.reduce((sum, asset) => sum + asset.bytes, 0)).toBeLessThan(10 * 1024 * 1024)
+it('keeps the desktop 8K environment library below 20 MiB', () => {
+  expect(manifest.assets.reduce((sum, asset) => sum + asset.bytes, 0)).toBeLessThan(20 * 1024 * 1024)
 })

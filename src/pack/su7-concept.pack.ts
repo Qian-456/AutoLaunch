@@ -3,6 +3,14 @@ import type { PropId } from '../props/prop-catalog'
 
 type ConcreteDoorTarget = Exclude<DoorTarget, 'all'>
 
+export const paintOptions = [
+  { id: 'original', label: '原色黄', color: '#cbb32e' },
+  { id: 'titanium', label: '钛银', color: '#c6cdd1' },
+  { id: 'graphite', label: '石墨灰', color: '#56616a' },
+  { id: 'ocean', label: '深海蓝', color: '#42657d' },
+] as const
+export type PaintOptionId = (typeof paintOptions)[number]['id']
+
 const degreesToRadians = (degrees: number) => degrees * Math.PI / 180
 const configuredAngle = (value: string | undefined, fallback: number) => {
   const parsed = Number(value)
@@ -472,6 +480,7 @@ export const su7ConceptPack = {
     },
   },
   appearance: {
+    paint: { material: 'CarPaint', options: paintOptions },
     /** Only visually dominant exterior materials participate in shadow maps. */
     shadowCasterMaterials: ['CarPaint', 'Roof', 'tire', 'RIM_1', 'Color_rim'],
     shadowReceiverMaterials: ['CarPaint', 'Roof', 'tire'],
@@ -487,11 +496,14 @@ export const su7ConceptPack = {
       { material: 'Roof_Glass', color: '#090b0e', metalness: 0.15, roughness: 0.18, removeColorMap: true },
       {
         material: 'CarPaint',
-        color: '#ffffff',
-        metalness: 0.38,
-        roughness: 0.36,
+        color: '#d8d8d2',
+        metalness: 0.22,
+        roughness: 0.3,
+        clearcoat: 0.85,
+        clearcoatRoughness: 0.2,
+        specularIntensity: 0.75,
         removeColorMap: false,
-        note: 'The Ddiaz GLB embeds the intended yellow paint, center silver stripes, side stripes and Ultra wordmarks in CarPaint.baseColorTexture; keep the original map and use a neutral white tint.',
+        note: 'Keep the native paint/decal map; a restrained neutral tint and dielectric clearcoat replace the previous full-white boost. Concept recolours affect yellow paint only.',
       },
       { material: 'Windows', color: '#020305', metalness: 0.0, roughness: 0.2, removeColorMap: true },
       { material: 'Brilliant_Black', color: '#050608', metalness: 0.04, roughness: 0.56, removeColorMap: true },

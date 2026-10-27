@@ -69,7 +69,7 @@
       "sha256": "8b8cc453cdf91dd4291ab6b71fc96f63984cf3c959a23b2852631043f445160b"
     },
     {
-      "file": "zwartkops_start_sunset_4k.webp",
+      "file": "zwartkops_start_sunset_8k.webp",
       "asset": "zwartkops_start_sunset",
       "source": "https://polyhaven.com/a/zwartkops_start_sunset",
       "download": "https://dl.polyhaven.org/file/ph-assets/HDRIs/extra/Tonemapped%20JPG/zwartkops_start_sunset.jpg",
@@ -78,10 +78,10 @@
         "Dimitrios Savva",
         "Jarod Guest"
       ],
-      "resolution": "4k",
-      "bytes": 1642214,
-      "sha256": "a7d079a894e62e3531ce0e88fb59d116324a35e68c0ef3bc4200b9c5be945215",
-      "derivation": "Official tonemapped JPG resized to 4096x2048, WebP quality 90; no generated content"
+      "resolution": "8k",
+      "bytes": 6444698,
+      "sha256": "57d218c1b60e2346ac61c2b4e8304ca865a064120b57c7e783d5e87bcfe30901",
+      "derivation": "Official tonemapped JPG resized to 8192x4096, WebP quality 90; no generated content"
     },
     {
       "file": "toposcope_sunset_1k.hdr",
@@ -97,7 +97,7 @@
       "sha256": "9cd21b7c45380368a87fe6a0251461faae5dd94a81b9d570762a74972d553f12"
     },
     {
-      "file": "toposcope_sunset_4k.webp",
+      "file": "toposcope_sunset_8k.webp",
       "asset": "toposcope_sunset",
       "source": "https://polyhaven.com/a/toposcope_sunset",
       "download": "https://dl.polyhaven.org/file/ph-assets/HDRIs/extra/Tonemapped%20JPG/toposcope_sunset.jpg",
@@ -105,10 +105,10 @@
       "authors": [
         "Dario Barresi"
       ],
-      "resolution": "4k",
-      "bytes": 1424282,
-      "sha256": "2358424beed73ac83c292448f7ee3355b87e02677a67ad61d73b79d2fb490be9",
-      "derivation": "Official tonemapped JPG resized to 4096x2048, WebP quality 90; no generated content"
+      "resolution": "8k",
+      "bytes": 5612702,
+      "sha256": "02815fbb3040cb1df9c742344cd6f3dea0ab6d77b38e31a1f1ef80b2d07028d5",
+      "derivation": "Official tonemapped JPG resized to 8192x4096, WebP quality 90; no generated content"
     }
   ]
 }

@@ -1,5 +1,12 @@
 .app-shell { grid-template-rows: 68px 1fr 36px; --accent: #d9d4c3; --accent-soft: rgba(217,212,195,.1); }
 .vehicle-viewport { position: absolute; inset: 0; }
+.paint-picker { position: absolute; z-index: 3; left: 32px; bottom: 108px; width: 205px; }
+.paint-picker p { margin: 0 0 8px; color: #d0d6dc; font-size: 12px; }
+.paint-picker > div { display: flex; gap: 8px; }
+.paint-picker button { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid transparent; border-radius: 50%; background: #151c24bd; }
+.paint-picker button[aria-pressed=true] { border-color: #d6e1ea; }
+.paint-picker button span { width: 22px; height: 22px; border-radius: 50%; border: 1px solid #ffffff20; }
+.stage--controls-open .paint-picker { visibility: hidden; pointer-events: none; }
 .environment-loading { padding: 10px 16px; color: #e3e9ee; border-radius: 8px; background: #171f28f5; font-size: 13px; white-space: nowrap; }
 .stage { --stage-ink: #f0f2f4; color: var(--stage-ink); }
 .stage::before { display: block; background: linear-gradient(90deg, rgba(9,13,18,.75), rgba(9,13,18,.15) 27%, transparent 48%), linear-gradient(0deg, rgba(9,13,18,.55), transparent 24%); }
@@ -94,6 +101,15 @@
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid #d4e3ef; outline-offset: 3px; }
 .ai-dock button:active, .exploration-topics > button:active, .ai-answer-panel button:active { transform: scale(.98); }
+@media (max-height: 800px) {
+  .exploration-topics { top: 130px; }
+  .exploration-topics h2 { margin-bottom: 12px; }
+  .exploration-topics > button { min-height: 72px; padding-block: 12px; }
+  .exploration-topics strong { font-size: 17px; }
+  .exploration-topics small { margin-top: 5px; }
+  .exploration-topics .exploration-topics__free { min-height: 32px; margin-top: 8px; }
+  .paint-picker { bottom: 96px; }
+}
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition-duration: 0ms !important; }
 }

@@ -9,8 +9,8 @@
 | 本地文件（`environments/`） | 作者 | 原始来源 | 处理 |
 |---|---|---|---|
 | `studio_small_09_1k.hdr` | Sergej Majboroda | [Studio Small 09](https://polyhaven.com/a/studio_small_09) | 原始 1K HDR，仅用于环境光与反射 |
-| `zwartkops_start_sunset_1k.hdr`、`zwartkops_start_sunset_4k.webp` | Dimitrios Savva、Jarod Guest | [Zwartkops Start Sunset](https://polyhaven.com/a/zwartkops_start_sunset) | HDR 保留原样；官方 tonemapped JPG 缩至 4096×2048、WebP quality 90 |
-| `toposcope_sunset_1k.hdr`、`toposcope_sunset_4k.webp` | Dario Barresi | [Toposcope Sunset](https://polyhaven.com/a/toposcope_sunset) | HDR 保留原样；官方 tonemapped JPG 缩至 4096×2048、WebP quality 90 |
+| `zwartkops_start_sunset_1k.hdr`、`zwartkops_start_sunset_8k.webp` | Dimitrios Savva、Jarod Guest | [Zwartkops Start Sunset](https://polyhaven.com/a/zwartkops_start_sunset) | HDR 保留原样；官方 tonemapped JPG 缩至 8192×4096、WebP quality 90 |
+| `toposcope_sunset_1k.hdr`、`toposcope_sunset_8k.webp` | Dario Barresi | [Toposcope Sunset](https://polyhaven.com/a/toposcope_sunset) | HDR 保留原样；官方 tonemapped JPG 缩至 8192×4096、WebP quality 90 |
 | `concrete_floor_02_*_1k.jpg` | Rob Tuytel | [Concrete Floor 02](https://polyhaven.com/a/concrete_floor_02) | 原始 diffuse、OpenGL normal、roughness 贴图 |
 
 精确下载地址、字节数、SHA-256 与处理记录见 [`environments/manifest.json`](environments/manifest.json)。素材在本地自托管，访客运行时无需连接 Poly Haven。拱形展廊为 AutoLaunch 程序化几何，户外使用接地全景背景与独立 HDR 环境光，不提供实景道路或地形仿真。
@@ -35,3 +35,5 @@ Copyright © 2026 AutoLaunch Contributors.
 | `su7_ultra.glb` | Ddiaz Design | [Sketchfab](https://skfb.ly/pKv9Z) | [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) |
 
 该车辆模型为第三方资产。本项目是非官方概念演示，与小米或任何汽车品牌不存在官方合作关系。公开展示、截图、视频或衍生版本均须保留作者、来源、许可证及非官方声明。
+
+原色黄、钛银、石墨灰、深海蓝为运行时概念车漆效果；保留原始模型、贴图、条纹和标识，不代表车型官方可售配色或原作者的原始配色方案。相关展示继续保留上述模型许可与署名。
