@@ -18,6 +18,8 @@ export const seatOptions = [
 ] as const
 export type SeatOptionId = (typeof seatOptions)[number]['id']
 
+const officialWebsite = { url: 'https://www.xiaomiev.com/ultra', label: '小米汽车 SU7 Ultra 官方车型页' }
+
 const degreesToRadians = (degrees: number) => degrees * Math.PI / 180
 const configuredAngle = (value: string | undefined, fallback: number) => {
   const parsed = Number(value)
@@ -125,6 +127,7 @@ export const DOOR_LABELS: Record<ConcreteDoorTarget, string> = {
 }
 
 export const su7ConceptPack = {
+  officialWebsite,
   id: 'su7-ultra-concept',
   version: '0.1.0',
   model: {
@@ -489,7 +492,7 @@ export const su7ConceptPack = {
   appearance: {
     reference: {
       modelYear: 2025,
-      url: 'https://www.xiaomiev.com/ultra',
+      url: officialWebsite.url,
       note: 'Five exterior colours visually approximated from Xiaomi SU7 Ultra official 2025 launch imagery, not measured factory paint values. Yellow retains its silver livery; other colours use an unstriped finish. Seat accents are demo customisations on the existing mesh, not a factory configurator.',
     },
     paint: { material: 'CarPaint', options: paintOptions },

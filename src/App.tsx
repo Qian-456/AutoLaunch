@@ -6,6 +6,7 @@ import { Experience, showroomEnvironments, type ShowroomEnvironment } from './co
 import { LaunchPlayer } from './components/LaunchPlayer'
 import { DOOR_LABELS, DOOR_TARGETS, su7ConceptPack, WINDOW_LABELS, WINDOW_TARGETS, type PaintOptionId, type SeatOptionId } from './pack/su7-concept.pack'
 import { AppearanceCustomizer } from './components/AppearanceCustomizer'
+import { VehicleWebsiteLink } from './components/VehicleWebsiteLink'
 import { routeInput } from './runtime/input-router'
 import { AiPanel, type AiPanelHandle } from './components/AiPanel'
 import { dispatchVehicleAction } from './runtime/action-dispatcher'
@@ -320,6 +321,7 @@ export function App() {
           </div>
         </div>
         <div className="topbar-actions">
+          <VehicleWebsiteLink website={su7ConceptPack.officialWebsite} />
           <button
             className={`stage-mode-button${stageMode === 'launch' ? ' active' : ''}`}
             type="button"
