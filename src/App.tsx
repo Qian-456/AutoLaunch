@@ -4,7 +4,8 @@ import { useProgress } from '@react-three/drei'
 import { ACESFilmicToneMapping, SRGBColorSpace } from 'three'
 import { Experience, showroomEnvironments, type ShowroomEnvironment } from './components/Experience'
 import { LaunchPlayer } from './components/LaunchPlayer'
-import { DOOR_LABELS, DOOR_TARGETS, paintOptions, seatOptions, su7ConceptPack, WINDOW_LABELS, WINDOW_TARGETS, type PaintOptionId, type SeatOptionId } from './pack/su7-concept.pack'
+import { DOOR_LABELS, DOOR_TARGETS, su7ConceptPack, WINDOW_LABELS, WINDOW_TARGETS, type PaintOptionId, type SeatOptionId } from './pack/su7-concept.pack'
+import { AppearanceCustomizer } from './components/AppearanceCustomizer'
 import { routeInput } from './runtime/input-router'
 import { AiPanel, type AiPanelHandle } from './components/AiPanel'
 import { dispatchVehicleAction } from './runtime/action-dispatcher'
@@ -76,6 +77,15 @@ export function App() {
   const [environment, setEnvironment] = useState<ShowroomEnvironment>('studio')
   const [paint, setPaint] = useState<PaintOptionId>('original')
   const [seats, setSeats] = useState<SeatOptionId>('yellow')
+  const [isAppearanceOpen, setIsAppearanceOpen] = useState(false)
+  const handleAppearanceOpen = useCallback((open: boolean) => {
+    setIsAppearanceOpen(open)
+    if (open) {
+      setIsControlPanelOpen(false)
+      setIsPropWarehouseOpen(false)
+      setIsCommandDrawerOpen(false)
+    }
+  }, [])
   const [isAiReading, setIsAiReading] = useState(false)
   const [feedback, setFeedback] = useState('拖动车身区域可自由旋转 · 滚轮缩放 · 文字可输入：主驾车窗50%')
   const { progress: loadingProgress } = useProgress()
@@ -329,7 +339,7 @@ export function App() {
         </div>
       </header>
 
-      <section className={`stage stage--${stageMode} stage--${environment}${isCommandDrawerOpen ? ' stage--command-open' : ''}${isControlPanelOpen || isPropWarehouseOpen ? ' stage--controls-open' : ''}`} style={{ backgroundColor: showroomEnvironments[environment].sky }} aria-label="SU7 Ultra 三维交互展示">
+      <section className={`stage stage--${stageMode} stage--${environment}${isCommandDrawerOpen ? ' stage--command-open' : ''}${isControlPanelOpen || isPropWarehouseOpen ? ' stage--controls-open' : ''}${isAppearanceOpen ? ' stage--appearance-open' : ''}`} style={{ backgroundColor: showroomEnvironments[environment].sky }} aria-label="SU7 Ultra 三维交互展示">
         <SceneErrorBoundary>
           <div className="vehicle-viewport">
           <Canvas
@@ -349,7 +359,7 @@ export function App() {
               environment={environment}
               paint={paint}
               seats={seats}
-              viewInsets={aiEnabled ? [isControlPanelOpen || isPropWarehouseOpen ? 425 : 245, isAiReading && !isControlPanelOpen && !isPropWarehouseOpen ? 375 : 32, 90, 125] : undefined}
+              viewInsets={aiEnabled ? [isControlPanelOpen || isPropWarehouseOpen ? 425 : isAppearanceOpen ? 352 : 245, isAiReading && !isControlPanelOpen && !isPropWarehouseOpen && !isAppearanceOpen ? 375 : 32, 90, 125] : undefined}
               onPropLoadError={handlePropLoadError}
               onCargoFeedback={setFeedback}
             />
@@ -366,24 +376,8 @@ export function App() {
           {(Object.keys(showroomEnvironments) as ShowroomEnvironment[]).map((id) => <button key={id} type="button" aria-pressed={environment === id} onClick={() => setEnvironment(id)}>{showroomEnvironments[id].label}</button>)}
         </div>
 
-        <div className="paint-picker" role="group" aria-label="车漆配色">
-          <p>车漆 · {paintOptions.find((option) => option.id === paint)!.label}</p>
-          <div>{paintOptions.map((option) => <button key={option.id} type="button" title={option.label}
-            aria-label={`车漆：${option.label}`} aria-pressed={paint === option.id} onClick={() => setPaint(option.id)}>
-            <span style={{ backgroundColor: option.color }} aria-hidden="true" />
-          </button>)}</div>
-          <details className="seat-picker">
-            <summary>座椅 · {seatOptions.find((option) => option.id === seats)!.label}<span>＋</span></summary>
-            <div className="seat-picker__panel">
-              <p>座椅点缀色</p>
-              <div role="group" aria-label="座椅点缀色">{seatOptions.map((option) => <button key={option.id} type="button"
-                aria-pressed={seats === option.id} onClick={() => setSeats(option.id)}>{option.label}</button>)}</div>
-              <small>演示自定义 · 保留现有座椅造型</small>
-              <a href={su7ConceptPack.appearance.reference.url} target="_blank" rel="noreferrer">车漆参考：小米汽车官网 ↗</a>
-              <small>颜色为视觉近似，具体配置以实车为准。</small>
-            </div>
-          </details>
-        </div>
+        <AppearanceCustomizer open={isAppearanceOpen} onOpenChange={handleAppearanceOpen}
+          paint={paint} seats={seats} onPaintChange={setPaint} onSeatsChange={setSeats} />
 
         {modelStatus === 'loading' && (
           <div className="loading-card" role="status">
@@ -417,6 +411,7 @@ export function App() {
               setIsControlPanelOpen((open) => !open)
               setIsPropWarehouseOpen(false)
               setIsCommandDrawerOpen(false)
+              setIsAppearanceOpen(false)
             }}
           >
             {isControlPanelOpen ? '收起控制' : '车辆控制'}
@@ -556,6 +551,7 @@ export function App() {
                 runOrbit('cargo_rear')
               }
               setIsControlPanelOpen(false)
+              setIsAppearanceOpen(false)
             }}
           >
             道具仓库
