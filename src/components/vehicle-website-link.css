@@ -1,0 +1,6 @@
+.vehicle-website-link { display: inline-flex; align-items: center; justify-content: center; gap: 8px; flex-shrink: 0; min-height: 38px; padding: 8px 14px; border: 1px solid #ffffff24; border-radius: 999px; background: #e2e5dc; color: #20272d; font-size: 13px; line-height: 1.4; text-decoration: none; white-space: nowrap; transition: background-color 120ms ease, transform 120ms ease; }
+.vehicle-website-link:focus-visible { outline: 2px solid #d4e3ef; outline-offset: 3px; }
+.vehicle-website-link:active { transform: scale(.98); }
+@media (hover: hover) and (pointer: fine) {
+  .vehicle-website-link:hover { background: #f1f2ec; }
+}

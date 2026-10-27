@@ -1,0 +1,3 @@
+# Minimal Pydantic AI provider extra; the lock pins the tested transitive closure.
+pydantic-ai-slim[openai]==2.58.0
+-r requirements.lock.txt

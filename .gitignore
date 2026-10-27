@@ -91,6 +91,7 @@ glb-nodes.json
 # Runtime 3D assets intentionally published with the application
 !public/assets/*.glb
 !public/assets/*.gltf
+!public/assets/environments/*.hdr
 
 # Archives and operating-system files
 *.zip

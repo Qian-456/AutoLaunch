@@ -1,0 +1,19 @@
+# Whitelist context: local credentials, backups, tooling and source media stay out.
+**
+!package.json
+!package-lock.json
+!index.html
+!vite.config.ts
+!tsconfig*.json
+!src/
+!src/**
+!public/
+!public/**
+!tools/
+!tools/export-registry.mjs
+!knowledge/
+!knowledge/**
+!server/
+!server/**
+server/**/__pycache__/**
+server/tests/**

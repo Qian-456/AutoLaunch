@@ -11,12 +11,24 @@ import type {
   VehiclePartState,
   VoiceState,
   WindowTarget,
+  LaunchChapter,
 } from '../types'
 import { WINDOW_TARGETS } from '../pack/su7-concept.pack'
 
 type ActionOutcome = { id: string; status: ActionTerminalStatus } | null
 
 type ExperienceState = {
+  playback: 'idle' | 'playing' | 'paused' | 'finished'
+  playbackScript: readonly LaunchChapter[] | null
+  planId: number
+  controlEpoch: number
+  takeoverPromptDismissed: boolean
+  showTakeoverPrompt: boolean
+  playScript: (script: readonly LaunchChapter[]) => void
+  interruptPlayback: () => void
+  resumePlayback: () => void
+  finishPlayback: () => void
+  keepManual: () => void
   stageMode: 'studio' | 'launch'
   cameraControlOwner: 'script' | 'orbit'
   activeOrbitPreset: OrbitPreset
@@ -99,7 +111,42 @@ function windowPartId(target: Exclude<WindowTarget, 'all'>): VehiclePartId {
   return `window_${target}` as VehiclePartId
 }
 
-export const useExperienceStore = create<ExperienceState>((set) => ({
+export const useExperienceStore = create<ExperienceState>((set, get) => ({
+  playback: 'idle',
+  playbackScript: null,
+  planId: 0,
+  controlEpoch: 0,
+  takeoverPromptDismissed: false,
+  showTakeoverPrompt: false,
+  playScript: (script) => {
+    get().interruptPlayback()
+    set((state) => ({ playbackScript: script, planId: state.planId + 1,
+      playback: script.length ? 'playing' : 'idle', stageMode: script.length ? 'launch' : 'studio',
+      manualOrbit: !script.length, cameraControlOwner: script.length ? 'script' : 'orbit', showTakeoverPrompt: false }))
+  },
+  interruptPlayback: () => {
+    const state = get()
+    // Cancel in-flight script animations through the existing terminal-state path.
+    for (const action of state.activeActions.values()) {
+      if (action.source === 'script') get().finishAction(action.id, 'cancelled')
+    }
+    for (const placement of state.cargoPlacements.values()) {
+      if (placement.sourcePlanId === state.planId && placement.state === 'loading') get().removeCargoPlacement(placement.instanceId)
+    }
+    set((current) => ({ controlEpoch: current.controlEpoch + 1,
+      playback: current.playback === 'playing' ? 'paused' : current.playback,
+      stageMode: 'studio', cameraControlOwner: 'orbit', manualOrbit: true,
+      showTakeoverPrompt: current.playback === 'playing' && !current.takeoverPromptDismissed
+        ? true : current.showTakeoverPrompt }))
+  },
+  resumePlayback: () => {
+    if (get().playback === 'paused' && get().playbackScript?.length) {
+      set({ playback: 'playing', stageMode: 'launch', manualOrbit: false,
+        cameraControlOwner: 'script', showTakeoverPrompt: false })
+    }
+  },
+  finishPlayback: () => set({ playback: 'finished', stageMode: 'studio', cameraControlOwner: 'orbit', manualOrbit: true, showTakeoverPrompt: false }),
+  keepManual: () => set({ takeoverPromptDismissed: true, showTakeoverPrompt: false }),
   stageMode: 'studio',
   cameraControlOwner: 'orbit',
   activeOrbitPreset: 'hero_front_left',
@@ -119,18 +166,23 @@ export const useExperienceStore = create<ExperienceState>((set) => ({
   setStageMode: (stageMode) => set({ stageMode }),
   requestOrbit: (preset) =>
     set((state) => ({
-      cameraControlOwner: 'orbit',
+      cameraControlOwner: state.playback === 'playing' ? 'script' : 'orbit',
       activeOrbitPreset: preset,
       orbitRequestId: state.orbitRequestId + 1,
       manualOrbit: false,
       notice: preset === 'turntable' ? '已启动 360° 展台环绕' : null,
     })),
-  beginManualOrbit: () =>
+  beginManualOrbit: () => {
+    const stageMode = get().stageMode
+    get().interruptPlayback()
     set({
+      // Preserve the stage's visual environment while the timeline is paused.
+      stageMode,
       cameraControlOwner: 'orbit',
       manualOrbit: true,
       notice: '已切换为手动环绕；不会自动恢复镜头',
-    }),
+    })
+  },
   setModelStatus: (modelStatus) => set({ modelStatus }),
   setNotice: (notice) => set({ notice }),
   setVoiceState: (voice) =>

@@ -1,0 +1,283 @@
+{
+  "director": {
+    "requestId": "contract-fixture",
+    "schemaVersion": "1.0.0",
+    "registryVersion": "0.1.0-director.1",
+    "packId": "su7-ultra-concept",
+    "packVersion": "0.1.0",
+    "mode": "fallback",
+    "provider": null,
+    "model": null,
+    "fallbackReason": "no_provider_configured",
+    "selection": {
+      "persona": "family",
+      "chapterIds": [
+        "rear-hatch",
+        "family-space",
+        "frameless-windows"
+      ]
+    },
+    "chapters": [
+      {
+        "id": "rear-hatch",
+        "title": "真实尾门组合动画",
+        "narration": "尾门外壳、内衬、尾翼支架与中央尾灯围绕同一铰链协同运动。",
+        "durationMs": 25000,
+        "camera": "rear_three_quarter",
+        "actions": [
+          {
+            "atMs": 2000,
+            "action": {
+              "type": "lights",
+              "target": "taillight",
+              "on": true
+            }
+          },
+          {
+            "atMs": 2000,
+            "action": {
+              "type": "trunk",
+              "open": true
+            }
+          },
+          {
+            "atMs": 14000,
+            "action": {
+              "type": "trunk",
+              "open": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "family-space",
+        "title": "家庭储物与通风",
+        "narration": "打开尾门停留观察，再展示四车窗通风。模型空间仅用于概念演示，实际装载请以实车为准。",
+        "durationMs": 20000,
+        "camera": "rear_three_quarter",
+        "actions": [
+          {
+            "atMs": 500,
+            "action": {
+              "type": "trunk",
+              "open": true
+            }
+          },
+          {
+            "atMs": 4000,
+            "action": {
+              "type": "window",
+              "target": "all",
+              "open": true,
+              "progress": 100
+            }
+          }
+        ]
+      },
+      {
+        "id": "frameless-windows",
+        "title": "无框车窗交互",
+        "narration": "来到主驾侧，展示真实车窗 Mesh 的独立升降。",
+        "durationMs": 20000,
+        "camera": "driver_side",
+        "actions": [
+          {
+            "atMs": 2000,
+            "action": {
+              "type": "window",
+              "target": "driver_front",
+              "open": true,
+              "progress": 100
+            }
+          },
+          {
+            "atMs": 10000,
+            "action": {
+              "type": "window",
+              "target": "driver_front",
+              "open": false,
+              "progress": 0
+            }
+          }
+        ]
+      }
+    ],
+    "citations": [
+      {
+        "chunkId": "3301a3e3e7e3c7d7",
+        "documentPath": "knowledge/05_演示能力与边界.md",
+        "heading": "行李与装载 [Ultra 演示专属]",
+        "text": "当前模型支持 20 寸登机箱与 24 寸托运行李箱的双箱概念装载，位置由现有 cargo-layout 和碰撞检查计算，不允许模型生成坐标。模型空间、道具和碰撞代理不构成实车装载容量证明。来源：[当前 Pack 能力注册表](/api/registry)。",
+        "sources": [
+          {
+            "title": "当前 Pack 能力注册表",
+            "url": "/api/registry"
+          }
+        ],
+        "modelScope": "SU7-Ultra",
+        "version": "v1.0 · 2026-10-21。这里只描述当前软件能力，不作为实车参数。",
+        "packId": "su7-ultra-concept",
+        "entityId": "trunk",
+        "sourceType": "runtime-contract",
+        "verification": "curated-unverified"
+      },
+      {
+        "chunkId": "9ae7327a575b16f7",
+        "documentPath": "knowledge/02_空间实测_前后备箱_后排.md",
+        "heading": "3.2 储物空间数据表",
+        "text": "| 参数项 | 数值（L / 描述） | 适用范围 | 判定依据 | 🔗 溯源链接 |\n| **后备箱容积（Ultra 来源 C）** | \"前后备厢合计约 500L\" | `[Ultra专属]` | Sina 2026-07-30 尺寸解析（三源中位值） | [Sina 07-30](https://auto.sina.cn/2026-07-30/detail-inikqqhf1303564.d.html) |",
+        "sources": [
+          {
+            "title": "Sina 07-30",
+            "url": "https://auto.sina.cn/2026-07-30/detail-inikqqhf1303564.d.html"
+          }
+        ],
+        "modelScope": "SU7-Ultra",
+        "version": "v2.0（数据校准版）· 数据采集日期：2026-07-24 ~ 2026-08-04",
+        "packId": "su7-ultra-concept",
+        "entityId": "trunk",
+        "sourceType": "media-report",
+        "verification": "curated-unverified"
+      },
+      {
+        "chunkId": "ee5af554e6f06ebf",
+        "documentPath": "knowledge/02_空间实测_前后备箱_后排.md",
+        "heading": "4.2 车门储物格 & 内饰储物 `[全系列共用]`",
+        "text": "- 前门储物格：可放 500ml 水瓶 × 2 + 折叠伞\n- 后门储物格：可放 500ml 水瓶 × 1\n- 中央扶手箱：带无线充电散热出风口，可放手机 + 钱包\n- 中控下层镂空：深度 15 cm，可横向放女士手包或 2 瓶 1.5L 矿泉水\n- 🔗 [Sina 07-10 毫米级空间优化文](https://auto.sina.cn/2026-07-10/detail-inihfyet5262667.d.html)",
+        "sources": [
+          {
+            "title": "Sina 07-10 毫米级空间优化文",
+            "url": "https://auto.sina.cn/2026-07-10/detail-inihfyet5262667.d.html"
+          }
+        ],
+        "modelScope": "SU7-series-shared",
+        "version": "v2.0（数据校准版）· 数据采集日期：2026-07-24 ~ 2026-08-04",
+        "packId": "su7-ultra-concept",
+        "entityId": "trunk",
+        "sourceType": "media-report",
+        "verification": "curated-unverified"
+      },
+      {
+        "chunkId": "91d3c9f6d74ead31",
+        "documentPath": "knowledge/02_空间实测_前后备箱_后排.md",
+        "heading": "3.2 储物空间数据表",
+        "text": "| 参数项 | 数值（L / 描述） | 适用范围 | 判定依据 | 🔗 溯源链接 |\n| **后备箱容积（Ultra 来源 B）** | **454 L** | `[Ultra专属]` | 太平洋汽车 pcauto 对比页（三源最小值） | [pcauto 对比页](https://www.pcauto.com.cn/note/848999985075716520.html) |",
+        "sources": [
+          {
+            "title": "pcauto 对比页",
+            "url": "https://www.pcauto.com.cn/note/848999985075716520.html"
+          }
+        ],
+        "modelScope": "SU7-Ultra",
+        "version": "v2.0（数据校准版）· 数据采集日期：2026-07-24 ~ 2026-08-04",
+        "packId": "su7-ultra-concept",
+        "entityId": "trunk",
+        "sourceType": "media-report",
+        "verification": "curated-unverified"
+      },
+      {
+        "chunkId": "4885b107d7d3af51",
+        "documentPath": "knowledge/02_空间实测_前后备箱_后排.md",
+        "heading": "3.2 储物空间数据表",
+        "text": "| 参数项 | 数值（L / 描述） | 适用范围 | 判定依据 | 🔗 溯源链接 |\n| **后备箱容积（Ultra 来源 A）** | **559 L** | `[Ultra专属]` | CarNewsChina 参数库（三源最大值） | [CarNewsChina Ultra 参数](https://data.carnewschina.com/database/xiaomi-auto/su7-ultra/2025/630km-1138kw-529900-26963) |",
+        "sources": [
+          {
+            "title": "CarNewsChina Ultra 参数",
+            "url": "https://data.carnewschina.com/database/xiaomi-auto/su7-ultra/2025/630km-1138kw-529900-26963"
+          }
+        ],
+        "modelScope": "SU7-Ultra",
+        "version": "v2.0（数据校准版）· 数据采集日期：2026-07-24 ~ 2026-08-04",
+        "packId": "su7-ultra-concept",
+        "entityId": "trunk",
+        "sourceType": "media-report",
+        "verification": "curated-unverified"
+      }
+    ],
+    "limitations": [
+      "仅执行已注册镜头、车窗、灯光、尾门和审核过的双箱组合；不模拟真实驾驶或证明实车装载能力。"
+    ]
+  },
+  "rag": {
+    "requestId": "contract-fixture",
+    "schemaVersion": "1.0.0",
+    "registryVersion": "0.1.0-director.1",
+    "packId": "su7-ultra-concept",
+    "packVersion": "0.1.0",
+    "mode": "fallback",
+    "provider": null,
+    "model": null,
+    "fallbackReason": "no_provider_configured",
+    "answer": "以下为本地精选资料摘录（原始链接未实时复核）；不同来源、测试条件及版本保留各自口径：\n\n[1] 参数项：后备箱容积（Ultra 来源 C）；数值（L / 描述）：\"前后备厢合计约 500L\"；适用范围：[Ultra专属]；判定依据：Sina 2026-07-30 尺寸解析（三源中位值）；🔗 溯源链接：Sina 07-30\n\n[2] 参数项：后备箱容积（Ultra 来源 B）；数值（L / 描述）：454 L；适用范围：[Ultra专属]；判定依据：太平洋汽车 pcauto 对比页（三源最小值）；🔗 溯源链接：pcauto 对比页\n\n[3] 参数项：后备箱容积（Ultra 来源 A）；数值（L / 描述）：559 L；适用范围：[Ultra专属]；判定依据：CarNewsChina 参数库（三源最大值）；🔗 溯源链接：CarNewsChina Ultra 参数",
+    "citations": [
+      {
+        "chunkId": "9ae7327a575b16f7",
+        "documentPath": "knowledge/02_空间实测_前后备箱_后排.md",
+        "heading": "3.2 储物空间数据表",
+        "text": "| 参数项 | 数值（L / 描述） | 适用范围 | 判定依据 | 🔗 溯源链接 |\n| **后备箱容积（Ultra 来源 C）** | \"前后备厢合计约 500L\" | `[Ultra专属]` | Sina 2026-07-30 尺寸解析（三源中位值） | [Sina 07-30](https://auto.sina.cn/2026-07-30/detail-inikqqhf1303564.d.html) |",
+        "sources": [
+          {
+            "title": "Sina 07-30",
+            "url": "https://auto.sina.cn/2026-07-30/detail-inikqqhf1303564.d.html"
+          }
+        ],
+        "modelScope": "SU7-Ultra",
+        "version": "v2.0（数据校准版）· 数据采集日期：2026-07-24 ~ 2026-08-04",
+        "packId": "su7-ultra-concept",
+        "entityId": "trunk",
+        "sourceType": "media-report",
+        "verification": "curated-unverified"
+      },
+      {
+        "chunkId": "91d3c9f6d74ead31",
+        "documentPath": "knowledge/02_空间实测_前后备箱_后排.md",
+        "heading": "3.2 储物空间数据表",
+        "text": "| 参数项 | 数值（L / 描述） | 适用范围 | 判定依据 | 🔗 溯源链接 |\n| **后备箱容积（Ultra 来源 B）** | **454 L** | `[Ultra专属]` | 太平洋汽车 pcauto 对比页（三源最小值） | [pcauto 对比页](https://www.pcauto.com.cn/note/848999985075716520.html) |",
+        "sources": [
+          {
+            "title": "pcauto 对比页",
+            "url": "https://www.pcauto.com.cn/note/848999985075716520.html"
+          }
+        ],
+        "modelScope": "SU7-Ultra",
+        "version": "v2.0（数据校准版）· 数据采集日期：2026-07-24 ~ 2026-08-04",
+        "packId": "su7-ultra-concept",
+        "entityId": "trunk",
+        "sourceType": "media-report",
+        "verification": "curated-unverified"
+      },
+      {
+        "chunkId": "4885b107d7d3af51",
+        "documentPath": "knowledge/02_空间实测_前后备箱_后排.md",
+        "heading": "3.2 储物空间数据表",
+        "text": "| 参数项 | 数值（L / 描述） | 适用范围 | 判定依据 | 🔗 溯源链接 |\n| **后备箱容积（Ultra 来源 A）** | **559 L** | `[Ultra专属]` | CarNewsChina 参数库（三源最大值） | [CarNewsChina Ultra 参数](https://data.carnewschina.com/database/xiaomi-auto/su7-ultra/2025/630km-1138kw-529900-26963) |",
+        "sources": [
+          {
+            "title": "CarNewsChina Ultra 参数",
+            "url": "https://data.carnewschina.com/database/xiaomi-auto/su7-ultra/2025/630km-1138kw-529900-26963"
+          }
+        ],
+        "modelScope": "SU7-Ultra",
+        "version": "v2.0（数据校准版）· 数据采集日期：2026-07-24 ~ 2026-08-04",
+        "packId": "su7-ultra-concept",
+        "entityId": "trunk",
+        "sourceType": "media-report",
+        "verification": "curated-unverified"
+      }
+    ],
+    "linkedActions": [
+      {
+        "type": "orbit",
+        "preset": "rear_three_quarter"
+      },
+      {
+        "type": "trunk",
+        "open": true
+      }
+    ],
+    "suggestedFollowUps": [
+      "Ultra 的后备箱容量来源有差异吗？",
+      "看看主驾车窗"
+    ]
+  }
+}

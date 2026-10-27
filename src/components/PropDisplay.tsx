@@ -10,6 +10,11 @@ import { dispatchVehicleAction } from '../runtime/action-dispatcher'
 
 const smoothStep = (value: number) => value * value * (3 - 2 * value)
 
+export function preloadCargoProps() {
+  useGLTF.preload('/assets/suitcase-carry-on-20.glb')
+  useGLTF.preload('/assets/suitcase-checked-24.glb')
+}
+
 export function computeCargoDragPosition(start: Vector3, lift: Vector3, sill: Vector3, end: Vector3, progress: number) {
   const t = MathUtils.clamp(progress, 0, 1)
   const inverse = 1 - t
@@ -110,6 +115,9 @@ export function PropDisplay({
     const group = root.current
     const active = animation.current
     if (!group || !active) return
+    const currentPlacement = useExperienceStore.getState().cargoPlacements.get(placement.instanceId)
+    // A plan can be cancelled before React unmounts this frame subscriber.
+    if (!currentPlacement || currentPlacement.state !== placement.state) { animation.current = null; return }
     const raw = Math.min(1, (performance.now() - active.startedAt) / 420)
     const progress = smoothStep(raw)
     group.position.lerpVectors(active.from, active.to, progress)
@@ -120,7 +128,7 @@ export function PropDisplay({
       removeCargoPlacement(placement.instanceId)
       onFeedback(`${entry.name}已收回道具仓库`)
     } else {
-      setCargoPlacement({ ...placement, state: 'loaded', transitionFrom: undefined })
+      setCargoPlacement({ ...currentPlacement, state: 'loaded', transitionFrom: undefined })
     }
   })
 

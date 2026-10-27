@@ -2,14 +2,15 @@ import { useEffect, useRef } from 'react'
 import { OrbitControls } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
-import { MOUSE, Vector3 } from 'three'
+import { MathUtils, MOUSE, PerspectiveCamera, Vector3 } from 'three'
 import { su7ConceptPack } from '../pack/su7-concept.pack'
 import { useExperienceStore } from '../store/experience-store'
 import type { OrbitActionDefinition } from '../types'
+import { composeVehicleCamera } from '../runtime/camera-composition'
 
 const smoothStep = (value: number) => value * value * (3 - 2 * value)
 
-export function OrbitCameraRig() {
+export function OrbitCameraRig({ insets = [0, 0, 0, 0] }: { insets?: readonly [number, number, number, number] }) {
   const controlsRef = useRef<OrbitControlsImpl>(null)
   const transition = useRef<null | {
     startedAt: number
@@ -19,13 +20,34 @@ export function OrbitCameraRig() {
     fromTarget: Vector3
     toTarget: Vector3
   }>(null)
-  const { camera } = useThree()
+  const { camera, gl, size } = useThree()
+  const uprightBlend = useRef(1)
+  const playback = useExperienceStore((state) => state.playback)
   const activeOrbitPreset = useExperienceStore((state) => state.activeOrbitPreset)
   const orbitRequestId = useExperienceStore((state) => state.orbitRequestId)
   const manualOrbit = useExperienceStore((state) => state.manualOrbit)
   const beginManualOrbit = useExperienceStore((state) => state.beginManualOrbit)
   const cargoPlacementActive = useExperienceStore((state) => Boolean(state.cargoPlacementSession))
   const definition: OrbitActionDefinition = su7ConceptPack.orbitActions[activeOrbitPreset]
+
+  useEffect(() => {
+    if (!(camera instanceof PerspectiveCamera)) return
+    return () => { camera.clearViewOffset() }
+  }, [camera])
+
+  useEffect(() => {
+    // Claim control before OrbitControls' pointer listener sees this same event.
+    // Script ownership disables user input until this explicit user gesture.
+    const claim = () => {
+      if (useExperienceStore.getState().playback === 'playing') {
+        beginManualOrbit()
+        transition.current = null
+        if (controlsRef.current) controlsRef.current.enabled = true
+      }
+    }
+    gl.domElement.addEventListener('pointerdown', claim, true)
+    return () => gl.domElement.removeEventListener('pointerdown', claim, true)
+  }, [gl, beginManualOrbit])
 
   useEffect(() => {
     const controls = controlsRef.current
@@ -43,7 +65,14 @@ export function OrbitCameraRig() {
   useFrame(() => {
     const controls = controlsRef.current
     const active = transition.current
-    if (!controls || !active) return
+    if (useExperienceStore.getState().manualOrbit) { transition.current = null; return }
+    if (!controls) return
+    if (!active) {
+      // Drei skips update() for disabled controls. Registered script turntables
+      // still need exactly one update, while pointer input stays disabled.
+      if (useExperienceStore.getState().playback === 'playing' && definition.autoRotate) controls.update()
+      return
+    }
     const progress = Math.min(1, (performance.now() - active.startedAt) / active.duration)
     const eased = smoothStep(progress)
     camera.position.lerpVectors(active.fromPosition, active.toPosition, eased)
@@ -52,11 +81,18 @@ export function OrbitCameraRig() {
     if (progress === 1) transition.current = null
   })
 
+  useFrame((_, delta) => {
+    if (!(camera instanceof PerspectiveCamera) || !controlsRef.current) return
+    const overview = activeOrbitPreset === 'cargo_overview'
+    uprightBlend.current = MathUtils.damp(uprightBlend.current, overview ? 0 : 1, 12, delta)
+    composeVehicleCamera(camera, controlsRef.current.target, size.width, size.height, insets, uprightBlend.current)
+  })
+
   return (
     <OrbitControls
       ref={controlsRef}
       makeDefault
-      enabled
+      enabled={playback !== 'playing'}
       enableDamping
       dampingFactor={0.065}
       enablePan={false}
@@ -69,7 +105,7 @@ export function OrbitCameraRig() {
       maxPolarAngle={Math.PI * 0.49}
       autoRotate={!manualOrbit && (definition.autoRotate ?? false)}
       autoRotateSpeed={definition.autoRotateSpeed ?? 0.9}
-      onStart={beginManualOrbit}
+      onStart={() => { if (!useExperienceStore.getState().manualOrbit) beginManualOrbit() }}
     />
   )
 }

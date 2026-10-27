@@ -1,0 +1,114 @@
+{
+  "provider": "Poly Haven",
+  "licenseUrl": "https://polyhaven.com/license",
+  "assets": [
+    {
+      "file": "studio_small_09_1k.hdr",
+      "asset": "studio_small_09",
+      "source": "https://polyhaven.com/a/studio_small_09",
+      "download": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr",
+      "license": "CC0-1.0",
+      "authors": [
+        "Sergej Majboroda"
+      ],
+      "resolution": "1k",
+      "bytes": 1615248,
+      "sha256": "e7cfda5f4e98e623db12b8bfd0184e048488e4855d9c83e2751fb44a32e80c45"
+    },
+    {
+      "file": "concrete_floor_02_diff_1k.jpg",
+      "asset": "concrete_floor_02",
+      "source": "https://polyhaven.com/a/concrete_floor_02",
+      "download": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/concrete_floor_02/concrete_floor_02_diff_1k.jpg",
+      "license": "CC0-1.0",
+      "authors": [
+        "Rob Tuytel"
+      ],
+      "resolution": "1k",
+      "bytes": 776097,
+      "sha256": "6db84a6d87dc50508b9d134d6fbd2b7e876b8081a5f43a118a249ca18de73af5"
+    },
+    {
+      "file": "concrete_floor_02_nor_gl_1k.jpg",
+      "asset": "concrete_floor_02",
+      "source": "https://polyhaven.com/a/concrete_floor_02",
+      "download": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/concrete_floor_02/concrete_floor_02_nor_gl_1k.jpg",
+      "license": "CC0-1.0",
+      "authors": [
+        "Rob Tuytel"
+      ],
+      "resolution": "1k",
+      "bytes": 192757,
+      "sha256": "fcda391b57a816d646ae15544688be53790478da5cd48dbe514b3c6901415e61"
+    },
+    {
+      "file": "concrete_floor_02_rough_1k.jpg",
+      "asset": "concrete_floor_02",
+      "source": "https://polyhaven.com/a/concrete_floor_02",
+      "download": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/concrete_floor_02/concrete_floor_02_rough_1k.jpg",
+      "license": "CC0-1.0",
+      "authors": [
+        "Rob Tuytel"
+      ],
+      "resolution": "1k",
+      "bytes": 318550,
+      "sha256": "c7f026a611b7859903c61ec7fd4574944157223e9e7796413dd6e2a66eaeac7a"
+    },
+    {
+      "file": "zwartkops_start_sunset_1k.hdr",
+      "asset": "zwartkops_start_sunset",
+      "source": "https://polyhaven.com/a/zwartkops_start_sunset",
+      "download": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/zwartkops_start_sunset_1k.hdr",
+      "license": "CC0-1.0",
+      "authors": [
+        "Dimitrios Savva",
+        "Jarod Guest"
+      ],
+      "resolution": "1k",
+      "bytes": 1553661,
+      "sha256": "8b8cc453cdf91dd4291ab6b71fc96f63984cf3c959a23b2852631043f445160b"
+    },
+    {
+      "file": "zwartkops_start_sunset_8k.webp",
+      "asset": "zwartkops_start_sunset",
+      "source": "https://polyhaven.com/a/zwartkops_start_sunset",
+      "download": "https://dl.polyhaven.org/file/ph-assets/HDRIs/extra/Tonemapped%20JPG/zwartkops_start_sunset.jpg",
+      "license": "CC0-1.0",
+      "authors": [
+        "Dimitrios Savva",
+        "Jarod Guest"
+      ],
+      "resolution": "8k",
+      "bytes": 6444698,
+      "sha256": "57d218c1b60e2346ac61c2b4e8304ca865a064120b57c7e783d5e87bcfe30901",
+      "derivation": "Official tonemapped JPG resized to 8192x4096, WebP quality 90; no generated content"
+    },
+    {
+      "file": "toposcope_sunset_1k.hdr",
+      "asset": "toposcope_sunset",
+      "source": "https://polyhaven.com/a/toposcope_sunset",
+      "download": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/toposcope_sunset_1k.hdr",
+      "license": "CC0-1.0",
+      "authors": [
+        "Dario Barresi"
+      ],
+      "resolution": "1k",
+      "bytes": 1432207,
+      "sha256": "9cd21b7c45380368a87fe6a0251461faae5dd94a81b9d570762a74972d553f12"
+    },
+    {
+      "file": "toposcope_sunset_8k.webp",
+      "asset": "toposcope_sunset",
+      "source": "https://polyhaven.com/a/toposcope_sunset",
+      "download": "https://dl.polyhaven.org/file/ph-assets/HDRIs/extra/Tonemapped%20JPG/toposcope_sunset.jpg",
+      "license": "CC0-1.0",
+      "authors": [
+        "Dario Barresi"
+      ],
+      "resolution": "8k",
+      "bytes": 5612702,
+      "sha256": "02815fbb3040cb1df9c742344cd6f3dea0ab6d77b38e31a1f1ef80b2d07028d5",
+      "derivation": "Official tonemapped JPG resized to 8192x4096, WebP quality 90; no generated content"
+    }
+  ]
+}

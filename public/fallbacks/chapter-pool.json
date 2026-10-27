@@ -1,0 +1,162 @@
+[
+  {
+    "id": "front-design",
+    "title": "前脸与智能灯光",
+    "narration": "从低趴前脸开始，点亮数字展车的第一束光。",
+    "durationMs": 15000,
+    "camera": "front",
+    "actions": [
+      {
+        "atMs": 2000,
+        "action": {
+          "type": "lights",
+          "target": "headlight",
+          "on": true
+        }
+      }
+    ]
+  },
+  {
+    "id": "frameless-windows",
+    "title": "无框车窗交互",
+    "narration": "来到主驾侧，展示真实车窗 Mesh 的独立升降。",
+    "durationMs": 20000,
+    "camera": "driver_side",
+    "actions": [
+      {
+        "atMs": 2000,
+        "action": {
+          "type": "window",
+          "target": "driver_front",
+          "open": true,
+          "progress": 100
+        }
+      },
+      {
+        "atMs": 10000,
+        "action": {
+          "type": "window",
+          "target": "driver_front",
+          "open": false,
+          "progress": 0
+        }
+      }
+    ]
+  },
+  {
+    "id": "rear-hatch",
+    "title": "真实尾门组合动画",
+    "narration": "尾门外壳、内衬、尾翼支架与中央尾灯围绕同一铰链协同运动。",
+    "durationMs": 25000,
+    "camera": "rear_three_quarter",
+    "actions": [
+      {
+        "atMs": 2000,
+        "action": {
+          "type": "lights",
+          "target": "taillight",
+          "on": true
+        }
+      },
+      {
+        "atMs": 2000,
+        "action": {
+          "type": "trunk",
+          "open": true
+        }
+      },
+      {
+        "atMs": 14000,
+        "action": {
+          "type": "trunk",
+          "open": false
+        }
+      }
+    ]
+  },
+  {
+    "id": "interactive-finale",
+    "title": "随时接管的数字发布会",
+    "narration": "所有入口统一为 VehicleAction，用户可以拖动镜头或点击车窗随时接管。",
+    "durationMs": 30000,
+    "camera": "turntable",
+    "actions": [
+      {
+        "atMs": 3000,
+        "action": {
+          "type": "window",
+          "target": "all",
+          "open": true,
+          "progress": 100
+        }
+      },
+      {
+        "atMs": 12000,
+        "action": {
+          "type": "window",
+          "target": "all",
+          "open": false,
+          "progress": 0
+        }
+      },
+      {
+        "atMs": 18000,
+        "action": {
+          "type": "lights",
+          "target": "headlight",
+          "on": false
+        }
+      },
+      {
+        "atMs": 20000,
+        "action": {
+          "type": "lights",
+          "target": "taillight",
+          "on": false
+        }
+      }
+    ]
+  },
+  {
+    "id": "family-space",
+    "title": "家庭储物与通风",
+    "camera": "rear_three_quarter",
+    "durationMs": 20000,
+    "narration": "打开尾门停留观察，再展示四车窗通风。模型空间仅用于概念演示，实际装载请以实车为准。",
+    "actions": [
+      {
+        "atMs": 500,
+        "action": {
+          "type": "trunk",
+          "open": true
+        }
+      },
+      {
+        "atMs": 4000,
+        "action": {
+          "type": "window",
+          "target": "all",
+          "open": true,
+          "progress": 100
+        }
+      }
+    ]
+  },
+  {
+    "id": "cargo-demo",
+    "title": "双箱装载概念演示",
+    "camera": "cargo_rear",
+    "durationMs": 20000,
+    "narration": "按已注册的双箱组合演示，布局仍经过现有空间与碰撞检查；这不是实车容量测量。",
+    "actions": [
+      {
+        "atMs": 2000,
+        "action": {
+          "type": "cargo",
+          "operation": "demonstrate",
+          "combinationId": "two_suitcases"
+        }
+      }
+    ]
+  }
+]

@@ -2,16 +2,20 @@ import { Component, type CSSProperties, type ErrorInfo, type FormEvent, type Rea
 import { Canvas } from '@react-three/fiber'
 import { useProgress } from '@react-three/drei'
 import { ACESFilmicToneMapping, SRGBColorSpace } from 'three'
-import { Experience } from './components/Experience'
+import { Experience, showroomEnvironments, type ShowroomEnvironment } from './components/Experience'
 import { LaunchPlayer } from './components/LaunchPlayer'
-import { DOOR_LABELS, DOOR_TARGETS, su7ConceptPack, WINDOW_LABELS, WINDOW_TARGETS } from './pack/su7-concept.pack'
-import { parseCommand } from './runtime/command-parser'
+import { DOOR_LABELS, DOOR_TARGETS, su7ConceptPack, WINDOW_LABELS, WINDOW_TARGETS, type PaintOptionId, type SeatOptionId } from './pack/su7-concept.pack'
+import { AppearanceCustomizer } from './components/AppearanceCustomizer'
+import { VehicleWebsiteLink } from './components/VehicleWebsiteLink'
+import { routeInput } from './runtime/input-router'
+import { AiPanel, type AiPanelHandle } from './components/AiPanel'
 import { dispatchVehicleAction } from './runtime/action-dispatcher'
 import { createBrowserSpeechRecognition, type BrowserSpeechRecognition } from './runtime/browser-speech'
 import { useExperienceStore } from './store/experience-store'
 import { buildSiteTitle } from './runtime/site-title'
 import type { OrbitPreset, VehicleAction, WindowTarget } from './types'
 import { propCatalog, type PropId } from './props/prop-catalog'
+import { preloadCargoProps } from './components/PropDisplay'
 
 const orbitButtons: Array<{ preset: OrbitPreset; label: string }> = [
   { preset: 'hero_front_left', label: '主视觉' },
@@ -71,16 +75,48 @@ export function App() {
   const [isPropWarehouseOpen, setIsPropWarehouseOpen] = useState(false)
   const [propLoadError, setPropLoadError] = useState<PropId | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
-  const [launchCountdown, setLaunchCountdown] = useState<number | null>(null)
+  const [environment, setEnvironment] = useState<ShowroomEnvironment>('studio')
+  const [paint, setPaint] = useState<PaintOptionId>('original')
+  const [seats, setSeats] = useState<SeatOptionId>('yellow')
+  const [isAppearanceOpen, setIsAppearanceOpen] = useState(false)
+  const handleAppearanceOpen = useCallback((open: boolean) => {
+    setIsAppearanceOpen(open)
+    if (open) {
+      setIsControlPanelOpen(false)
+      setIsPropWarehouseOpen(false)
+      setIsCommandDrawerOpen(false)
+    }
+  }, [])
+  const [isAiReading, setIsAiReading] = useState(false)
   const [feedback, setFeedback] = useState('拖动车身区域可自由旋转 · 滚轮缩放 · 文字可输入：主驾车窗50%')
   const { progress: loadingProgress } = useProgress()
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null)
+  const aiRef = useRef<AiPanelHandle>(null)
+  const playback = useExperienceStore((s) => s.playback)
+  const playbackScript = useExperienceStore((s) => s.playbackScript)
+  const showTakeoverPrompt = useExperienceStore((s) => s.showTakeoverPrompt)
+  const aiEnabled = import.meta.env.VITE_ENABLE_AI_PANELS !== '0'
 
   useEffect(() => {
     // Dual guard: Vite replaces %VITE_APP_SITE_TITLE% in index.html at build time,
     // but this runtime assignment guarantees a Chinese-bearing title even if the
     // static replacement is skipped (e.g. raw-static hosting, non-Vite proxy).
     document.title = buildSiteTitle()
+  }, [])
+
+  useEffect(() => {
+    // Decode the two local luggage assets while the initial vehicle view is idle,
+    // instead of blocking the first "demo combination" click with both GLBs.
+    const idleWindow = window as Window & {
+      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
+      cancelIdleCallback?: (handle: number) => void
+    }
+    if (idleWindow.requestIdleCallback) {
+      const handle = idleWindow.requestIdleCallback(preloadCargoProps, { timeout: 2500 })
+      return () => idleWindow.cancelIdleCallback?.(handle)
+    }
+    const handle = window.setTimeout(preloadCargoProps, 600)
+    return () => window.clearTimeout(handle)
   }, [])
   const modelStatus = useExperienceStore((state) => state.modelStatus)
   const stageMode = useExperienceStore((state) => state.stageMode)
@@ -151,9 +187,14 @@ export function App() {
   }, [])
 
   const runCommandText = useCallback((text: string, clearAfter = false) => {
-    const parsed = parseCommand(text)
-    if (!parsed.matched) {
-      setFeedback(parsed.suggestion)
+    if (aiEnabled && aiRef.current) {
+      aiRef.current.submitText(text)
+      if (clearAfter) setCommand('')
+      return
+    }
+    const parsed = routeInput(text)
+    if (parsed.kind === 'requirement') {
+      setFeedback('请尝试直接指令：打开主驾车窗、打开后备箱、开灯')
       return
     }
     if (useExperienceStore.getState().stageMode === 'launch') {
@@ -162,33 +203,22 @@ export function App() {
     const result = dispatchVehicleAction(parsed.action)
     setFeedback(result.message)
     if (clearAfter) setCommand('')
+  }, [aiEnabled])
+
+  const toggleLaunchMode = useCallback(() => {
+    const state = useExperienceStore.getState()
+    if (state.playback === 'playing') {
+      state.interruptPlayback(); state.keepManual()
+      setFeedback('发布会已停止，控制权已交还给您')
+    } else if (state.playback === 'paused') state.resumePlayback()
+    else {
+      setIsControlPanelOpen(false); setIsCommandDrawerOpen(false); setIsPropWarehouseOpen(false)
+      state.playScript(su7ConceptPack.recordingScript)
+    }
   }, [])
 
-  const toggleLaunchMode = useCallback(async () => {
-    if (useExperienceStore.getState().stageMode === 'launch') {
-      setStageMode('studio')
-      setFeedback('发布会已停止，控制权已交还给您')
-      return
-    }
-    setIsControlPanelOpen(false)
-    setIsCommandDrawerOpen(false)
-    setIsPropWarehouseOpen(false)
-    setStageMode('studio')
-    dispatchVehicleAction({ type: 'trunk', open: false })
-    dispatchVehicleAction({ type: 'window', target: 'all', open: false, progress: 0 })
-    dispatchVehicleAction({ type: 'lights', target: 'headlight', on: false })
-    dispatchVehicleAction({ type: 'lights', target: 'taillight', on: false })
-    useExperienceStore.getState().requestOrbit(su7ConceptPack.recordingScript[0].camera)
-    setLaunchCountdown(3)
-    setFeedback('发布会准备开始 · 3 秒后自动执行镜头、动作与字幕')
-    try {
-      if (!document.fullscreenElement) await document.documentElement.requestFullscreen()
-    } catch {
-      setFeedback('浏览器未允许全屏；发布会仍会正常开始，可按 F11 手动进入全屏')
-    }
-  }, [setStageMode])
-
   const finishLaunch = useCallback(() => {
+    useExperienceStore.getState().finishPlayback()
     setFeedback('发布会演示完成，您可以继续自由体验车辆')
   }, [])
 
@@ -211,21 +241,8 @@ export function App() {
   }, [])
 
   useEffect(() => {
-    if (launchCountdown === null) return
-    const timer = window.setTimeout(() => {
-      if (launchCountdown === 1) {
-        setLaunchCountdown(null)
-        setStageMode('launch')
-        return
-      }
-      setLaunchCountdown((current) => current === null ? null : current - 1)
-    }, 1_000)
-    return () => window.clearTimeout(timer)
-  }, [launchCountdown, setStageMode])
-
-  useEffect(() => {
     if (stageMode === 'launch' && manualOrbit) {
-      setFeedback('您已接管发布会镜头；字幕与动作继续，相机不会自动恢复')
+      setFeedback('您已接管发布会；只有显式恢复才会继续')
     }
   }, [manualOrbit, stageMode])
 
@@ -252,7 +269,7 @@ export function App() {
       }
       const visible = visibleTranscript.trim()
       if (visible) setCommand(visible)
-      if (finalTranscript.trim()) runCommandText(finalTranscript.trim())
+      if (finalTranscript.trim()) runCommandText(finalTranscript)
     }
     recognition.onerror = (event) => {
       if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
@@ -294,16 +311,17 @@ export function App() {
   }
 
   return (
-    <main className={`app-shell${isFullscreen && stageMode === 'launch' ? ' app-shell--launch-fullscreen' : ''}${isFullscreen && stageMode === 'launch' && manualOrbit ? ' app-shell--manual-orbit' : ''}`}>
+    <main className={`app-shell${aiEnabled ? ' app-shell--ai' : ''}${isFullscreen && stageMode === 'launch' ? ' app-shell--launch-fullscreen' : ''}${isFullscreen && stageMode === 'launch' && manualOrbit ? ' app-shell--manual-orbit' : ''}`}>
       <header className="topbar">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true" />
           <div>
-            <p>AUTOLAUNCH / PRODUCT VIEW</p>
+            <p>AutoLaunch · 产品探索</p>
             <h1>2025 SU7 ULTRA · 交互式数字展车</h1>
           </div>
         </div>
         <div className="topbar-actions">
+          <VehicleWebsiteLink website={su7ConceptPack.officialWebsite} />
           <button
             className={`stage-mode-button${stageMode === 'launch' ? ' active' : ''}`}
             type="button"
@@ -311,24 +329,25 @@ export function App() {
             onClick={toggleLaunchMode}
           >
             <span aria-hidden="true" />
-            {stageMode === 'launch' ? '停止发布会' : '开启发布会'}
+            {playback === 'playing' ? '停止发布会' : playback === 'paused' ? '恢复发布会' : '开启发布会'}
           </button>
           <button className="fullscreen-button" type="button" onClick={toggleFullscreen}>
             {isFullscreen ? '退出全屏' : '全屏浏览'}
           </button>
           <div className={`model-state model-state--${modelStatus}`}>
             <span />
-            {modelStatus === 'ready' ? '3D READY' : modelStatus === 'error' ? 'MODEL ERROR' : `${Math.round(loadingProgress)}% LOADING`}
+            {modelStatus === 'ready' ? '展车已就绪' : modelStatus === 'error' ? '模型载入失败' : `载入中 ${Math.round(loadingProgress)}%`}
           </div>
         </div>
       </header>
 
-      <section className={`stage stage--${stageMode}`} aria-label="SU7 Ultra 三维交互展示">
+      <section className={`stage stage--${stageMode} stage--${environment}${isCommandDrawerOpen ? ' stage--command-open' : ''}${isControlPanelOpen || isPropWarehouseOpen ? ' stage--controls-open' : ''}${isAppearanceOpen ? ' stage--appearance-open' : ''}`} style={{ backgroundColor: showroomEnvironments[environment].sky }} aria-label="SU7 Ultra 三维交互展示">
         <SceneErrorBoundary>
+          <div className="vehicle-viewport">
           <Canvas
             shadows
             dpr={[1, 1.5]}
-            camera={{ position: [-6.25, 2.25, 4.6], fov: 32, near: 0.1, far: 100 }}
+            camera={{ position: [...su7ConceptPack.orbitActions.hero_front_left.position], fov: 28, near: 0.1, far: 500 }}
             gl={{
               antialias: true,
               alpha: false,
@@ -339,16 +358,28 @@ export function App() {
             }}
           >
             <Experience
+              environment={environment}
+              paint={paint}
+              seats={seats}
+              viewInsets={aiEnabled ? [isControlPanelOpen || isPropWarehouseOpen ? 425 : isAppearanceOpen ? 352 : 245, isAiReading && !isControlPanelOpen && !isPropWarehouseOpen && !isAppearanceOpen ? 375 : 32, 90, 125] : undefined}
               onPropLoadError={handlePropLoadError}
               onCargoFeedback={setFeedback}
             />
           </Canvas>
+          </div>
         </SceneErrorBoundary>
 
         <div className="hero-copy">
-          <p className="eyebrow">PERFORMANCE, REFRAMED</p>
+          <h2>从你的好奇心出发</h2>
           <p>点击真实车窗直接开合 · 拖动镜头自由观察</p>
         </div>
+
+        <div className="environment-switcher" role="group" aria-label="展示环境">
+          {(Object.keys(showroomEnvironments) as ShowroomEnvironment[]).map((id) => <button key={id} type="button" aria-pressed={environment === id} onClick={() => setEnvironment(id)}>{showroomEnvironments[id].label}</button>)}
+        </div>
+
+        <AppearanceCustomizer open={isAppearanceOpen} onOpenChange={handleAppearanceOpen}
+          paint={paint} seats={seats} onPaintChange={setPaint} onSeatsChange={setSeats} />
 
         {modelStatus === 'loading' && (
           <div className="loading-card" role="status">
@@ -362,18 +393,16 @@ export function App() {
         {notice && <div className="notice">{notice}</div>}
 
         <LaunchPlayer
-          active={stageMode === 'launch' && modelStatus === 'ready'}
+          active={playback === 'playing' && modelStatus === 'ready'}
           onFinished={finishLaunch}
-          script={su7ConceptPack.recordingScript}
+          script={playbackScript ?? su7ConceptPack.recordingScript}
         />
 
-        {launchCountdown !== null && (
-          <div className="launch-countdown" role="status" aria-live="assertive">
-            <small>SHOW READY</small>
-            <strong>{launchCountdown}</strong>
-            <span>镜头、动作与字幕即将自动开始</span>
-          </div>
-        )}
+        {showTakeoverPrompt && <div className="takeover-prompt" role="status">
+          <span>已接管自动发布会</span>
+          <button onClick={() => useExperienceStore.getState().resumePlayback()}>恢复自动发布会</button>
+          <button onClick={() => useExperienceStore.getState().keepManual()}>保持手动控制</button>
+        </div>}
 
         <div className="control-deck">
           <button
@@ -383,6 +412,8 @@ export function App() {
             onClick={() => {
               setIsControlPanelOpen((open) => !open)
               setIsPropWarehouseOpen(false)
+              setIsCommandDrawerOpen(false)
+              setIsAppearanceOpen(false)
             }}
           >
             {isControlPanelOpen ? '收起控制' : '车辆控制'}
@@ -522,6 +553,7 @@ export function App() {
                 runOrbit('cargo_rear')
               }
               setIsControlPanelOpen(false)
+              setIsAppearanceOpen(false)
             }}
           >
             道具仓库
@@ -541,7 +573,7 @@ export function App() {
               </div>
               <button className="prop-warehouse__close" type="button" onClick={closePropWarehouse} aria-label="收起道具仓库">× 收起</button>
             </div>
-            <p className="prop-warehouse__summary">{cargoPlacements.size} / {su7ConceptPack.cargoVolume.collider.maxInstances} 件 · 点击添加后直接在后备箱内放置</p>
+            <p className="prop-warehouse__summary">当前 {cargoPlacements.size} 件 · 场景安全上限 {su7ConceptPack.cargoVolume.collider.maxInstances} 件 · 实际容量取决于尺寸与姿态</p>
             <button
               className="prop-warehouse__demo"
               type="button"
@@ -606,13 +638,17 @@ export function App() {
           </nav>
         </div>
 
-        <div className={`interaction-drawer${isCommandDrawerOpen ? ' interaction-drawer--open' : ''}`}>
+        {!aiEnabled && <div className={`interaction-drawer${isCommandDrawerOpen ? ' interaction-drawer--open' : ''}`}>
           <button
             className="interaction-drawer__handle"
             type="button"
             aria-expanded={isCommandDrawerOpen}
             aria-controls="command-drawer-content"
-            onClick={() => setIsCommandDrawerOpen((open) => !open)}
+            onClick={() => {
+              setIsCommandDrawerOpen((open) => !open)
+              setIsControlPanelOpen(false)
+              setIsPropWarehouseOpen(false)
+            }}
           >
             <span aria-hidden="true">{isCommandDrawerOpen ? '⌄' : '⌃'}</span>
             文字 / 语音
@@ -651,7 +687,9 @@ export function App() {
             </form>
             <p>{feedback}</p>
           </div>
-        </div>
+        </div>}
+        {aiEnabled && <AiPanel ref={aiRef} command={command} onCommandChange={setCommand} onFeedback={setFeedback} voiceState={voiceState} onVoice={toggleVoice} onReadingChange={setIsAiReading} />}
+        {aiEnabled && <p className="interaction-feedback" role="status">{feedback}</p>}
       </section>
 
       <footer className="legal-bar">
@@ -660,6 +698,7 @@ export function App() {
           来源：<a href={su7ConceptPack.attribution.sourceUrl} target="_blank" rel="noreferrer">Sketchfab</a>
           {' · '}
           <a href={su7ConceptPack.attribution.licenseUrl} target="_blank" rel="noreferrer">{su7ConceptPack.attribution.license}</a>
+          {' · 场景：'}<a href="https://polyhaven.com" target="_blank" rel="noreferrer">Poly Haven · CC0</a>
         </span>
       </footer>
     </main>

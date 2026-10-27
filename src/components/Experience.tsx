@@ -1,7 +1,7 @@
 import { Component, Suspense, useCallback, useEffect, useMemo, useRef, type ErrorInfo, type ReactNode } from 'react'
-import { ContactShadows, Edges, Html } from '@react-three/drei'
+import { Edges, Html } from '@react-three/drei'
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
-import { BufferGeometry, DoubleSide, Float32BufferAttribute, MathUtils, PointLight, SpotLight } from 'three'
+import { BufferGeometry, DoubleSide, Float32BufferAttribute, MathUtils, Object3D, PointLight, SpotLight } from 'three'
 import { VehicleModel } from './VehicleModel'
 import { OrbitCameraRig } from './OrbitCameraRig'
 import { useExperienceStore } from '../store/experience-store'
@@ -9,7 +9,9 @@ import { CargoGhost, PropDisplay } from './PropDisplay'
 import { findProp } from '../props/prop-catalog'
 import { candidateAtPosition } from '../runtime/cargo-layout'
 import { dispatchVehicleAction } from '../runtime/action-dispatcher'
-import { su7ConceptPack } from '../pack/su7-concept.pack'
+import { su7ConceptPack, type PaintOptionId, type SeatOptionId } from '../pack/su7-concept.pack'
+import { ShowroomEnvironment, type ShowroomEnvironment as ShowroomEnvironmentId } from './ShowroomEnvironment'
+export { showroomEnvironments, type ShowroomEnvironment } from './ShowroomEnvironment'
 
 class PropDisplayBoundary extends Component<{
   children: ReactNode
@@ -89,6 +91,7 @@ const reasonLabels = {
 function CargoInteriorLights() {
   const point = useRef<PointLight>(null)
   const fill = useRef<SpotLight>(null)
+  const fillTarget = useRef<Object3D>(null)
   const trunkOpen = useExperienceStore((state) => state.vehiclePartStates.get('trunk') === 'open')
   const activeOrbitPreset = useExperienceStore((state) => state.activeOrbitPreset)
   const cargoActive = trunkOpen || activeOrbitPreset === 'cargo_rear' || activeOrbitPreset === 'cargo_overview'
@@ -97,11 +100,13 @@ function CargoInteriorLights() {
     const targetFill = cargoActive ? 1.15 : 0
     if (point.current) point.current.intensity = MathUtils.damp(point.current.intensity, targetPoint, 7, delta)
     if (fill.current) fill.current.intensity = MathUtils.damp(fill.current.intensity, targetFill, 7, delta)
+    if (fill.current && fillTarget.current && fill.current.target !== fillTarget.current) fill.current.target = fillTarget.current
   })
   return (
     <>
       <pointLight ref={point} position={[1.72, 1.26, -0.34]} intensity={0} distance={1.35} decay={2.1} color="#ffe2b0" />
-      <spotLight ref={fill} position={[2.38, 1.38, 0]} target-position={[1.83, 0.78, 0]} intensity={0} distance={1.7} angle={0.62} penumbra={0.82} decay={2} color="#d7ebff" />
+      <object3D ref={fillTarget} position={[1.83, 0.78, 0]} />
+      <spotLight ref={fill} position={[2.38, 1.38, 0]} intensity={0} distance={1.7} angle={0.62} penumbra={0.82} decay={2} color="#d7ebff" />
     </>
   )
 }
@@ -137,7 +142,8 @@ function CargoPlacementController({ onFeedback }: { onFeedback: (message: string
         rotation: result.candidate.rotation,
         occupiedBounds: result.candidate.bounds,
         supportHeight: result.candidate.supportHeight,
-        contactOffsetY: result.candidate.contactOffsetY,
+        collisionCenter: result.candidate.collisionCenter,
+        worldGroundContacts: result.candidate.worldGroundContacts,
         anchorId: null,
       } : null,
       valid: result.ok,
@@ -212,9 +218,17 @@ function CargoPlacementController({ onFeedback }: { onFeedback: (message: string
 }
 
 export function Experience({
+  environment = 'studio',
+  paint = 'original',
+  seats = 'yellow',
+  viewInsets,
   onPropLoadError,
   onCargoFeedback,
 }: {
+  environment?: ShowroomEnvironmentId
+  paint?: PaintOptionId
+  seats?: SeatOptionId
+  viewInsets?: readonly [number, number, number, number]
   onPropLoadError: (assetId: string) => void
   onCargoFeedback: (message: string) => void
 }) {
@@ -222,19 +236,14 @@ export function Experience({
   const cargoPlacements = useExperienceStore((state) => state.cargoPlacements)
   const selectedInstanceId = useExperienceStore((state) => state.selectedCargoInstanceId)
   const sessionInstanceId = useExperienceStore((state) => state.cargoPlacementSession?.instanceId)
+  const cargoShadowPlacements = [...cargoPlacements.values()].filter((placement) => placement.state !== 'returning')
 
   return (
     <>
-      <color attach="background" args={['#090b0e']} />
-      <fog attach="fog" args={['#090b0e', 10, 22]} />
-      <ambientLight intensity={0.82} />
-      <directionalLight castShadow position={[4, 8, 6]} intensity={2.35} color="#fff8e8" shadow-mapSize={[1024, 1024]} />
-      <directionalLight position={[-5, 3, -4]} intensity={1.35} color="#91b9ff" />
-      <spotLight position={[0, 6, -5]} intensity={3.2} angle={0.55} penumbra={0.8} color="#ffd15c" />
-      <pointLight position={[1.45, 1.65, 0]} intensity={1.8} distance={2.6} decay={1.8} color="#e8fff9" />
+      <ShowroomEnvironment environment={environment} onError={onCargoFeedback} />
       <CargoInteriorLights />
-      <Suspense fallback={null}><VehicleModel /></Suspense>
-      {stageMode === 'studio' && [...cargoPlacements.values()]
+      <Suspense fallback={null}><VehicleModel paint={paint} seats={seats} /></Suspense>
+      {[...cargoPlacements.values()]
         .filter((placement) => placement.instanceId !== sessionInstanceId)
         .map((placement) => {
           const entry = findProp(placement.catalogPropId)
@@ -248,26 +257,23 @@ export function Experience({
           )
         })}
       {stageMode === 'studio' && <CargoPlacementController onFeedback={onCargoFeedback} />}
-      {stageMode === 'studio' && [...cargoPlacements.values()].filter((placement) => placement.state !== 'returning').map((placement) => (
-        <ContactShadows
-          key={`contact-${placement.instanceId}`}
-          position={[placement.position[0], placement.supportHeight + 0.002, placement.position[2]]}
-          opacity={0.78}
-          scale={Math.max(placement.occupiedBounds.halfSize[0], placement.occupiedBounds.halfSize[2]) * 2.35}
-          blur={1.1}
-          far={0.32}
-          resolution={256}
-          frames={8}
-        />
-      ))}
-      <ContactShadows position={[0, -0.015, 0]} opacity={0.72} scale={12} blur={2.6} far={5} frames={3} />
-      {stageMode === 'launch' ? <LaunchStage /> : (
-        <mesh rotation-x={-Math.PI / 2} position-y={-0.03} receiveShadow>
-          <circleGeometry args={[10, 96]} />
-          <meshStandardMaterial color="#14171b" roughness={0.72} metalness={0.22} />
+      {stageMode === 'studio' && cargoShadowPlacements.map((placement) => (
+        <mesh
+          key={`cargo-shadow-${placement.instanceId}`}
+          position={[placement.position[0], placement.supportHeight + 0.001, placement.position[2]]}
+          rotation-x={-Math.PI / 2}
+          raycast={() => null}
+          renderOrder={1}
+        >
+          <circleGeometry args={[Math.max(placement.occupiedBounds.halfSize[0], placement.occupiedBounds.halfSize[2]) * 0.92, 40]} />
+          <meshBasicMaterial color="#000000" transparent opacity={0.22} depthWrite={false} polygonOffset polygonOffsetFactor={-1} />
         </mesh>
-      )}
-      <OrbitCameraRig />
+      ))}
+      <mesh rotation-x={-Math.PI / 2} position-y={-0.002} receiveShadow>
+        <planeGeometry args={[100, 100]} /><shadowMaterial transparent opacity={0.35} depthWrite={false} />
+      </mesh>
+      {stageMode === 'launch' && <LaunchStage />}
+      <OrbitCameraRig insets={viewInsets} />
     </>
   )
 }

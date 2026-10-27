@@ -1,0 +1,18 @@
+{
+  "personas": [
+    "family",
+    "performance"
+  ],
+  "fallbackChapterIdsByPersona": {
+    "family": [
+      "rear-hatch",
+      "family-space",
+      "frameless-windows"
+    ],
+    "performance": [
+      "front-design",
+      "frameless-windows",
+      "interactive-finale"
+    ]
+  }
+}

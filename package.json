@@ -6,8 +6,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
-    "test": "vitest run"
+    "build": "npm run registry:check && tsc -b && vite build",
+    "test": "vitest run",
+    "registry:export": "node tools/export-registry.mjs",
+    "registry:check": "node tools/export-registry.mjs --check"
   },
   "dependencies": {
     "@react-three/drei": "^9.122.0",

@@ -3,6 +3,23 @@ import type { PropId } from '../props/prop-catalog'
 
 type ConcreteDoorTarget = Exclude<DoorTarget, 'all'>
 
+export const paintOptions = [
+  { id: 'original', label: '闪电黄', color: '#ffc21c' },
+  { id: 'space-silver', label: '太空银', color: '#b8bec6' },
+  { id: 'parrot-green', label: '鹦鹉绿', color: '#007b72' },
+  { id: 'pearl-white', label: '珍珠白', color: '#eeeae1' },
+  { id: 'obsidian-black', label: '曜石黑', color: '#15171b' },
+] as const
+export type PaintOptionId = (typeof paintOptions)[number]['id']
+export const seatOptions = [
+  { id: 'yellow', label: '黑 / 黄', color: '#e7b42b' },
+  { id: 'red', label: '黑 / 红', color: '#a52a33' },
+  { id: 'graphite', label: '黑 / 灰', color: '#62676d' },
+] as const
+export type SeatOptionId = (typeof seatOptions)[number]['id']
+
+const officialWebsite = { url: 'https://www.xiaomiev.com/ultra', label: '小米汽车 SU7 Ultra 官方车型页' }
+
 const degreesToRadians = (degrees: number) => degrees * Math.PI / 180
 const configuredAngle = (value: string | undefined, fallback: number) => {
   const parsed = Number(value)
@@ -110,6 +127,7 @@ export const DOOR_LABELS: Record<ConcreteDoorTarget, string> = {
 }
 
 export const su7ConceptPack = {
+  officialWebsite,
   id: 'su7-ultra-concept',
   version: '0.1.0',
   model: {
@@ -141,10 +159,12 @@ export const su7ConceptPack = {
       { id: 'wheel_arch_right', center: [1.92, 0.87, 0.56], halfSize: [0.34, 0.13, 0.06] },
       { id: 'rear_sill', center: [2.39, 0.81, 0], halfSize: [0.055, 0.075, 0.43] },
     ],
-    hatchSweep: {
-      center: [2.20, 1.14, 0],
-      halfSize: [0.23, 0.20, 0.45],
-    },
+    /** Piecewise closed-hatch inner envelope; avoids the over-broad legacy box. */
+    hatchSweepSections: [
+      { id: 'hatch_lower_lip', center: [2.31, 1.115, 0], halfSize: [0.09, 0.075, 0.43] },
+      { id: 'hatch_mid_liner', center: [2.24, 1.245, 0], halfSize: [0.13, 0.085, 0.42] },
+      { id: 'hatch_upper_liner', center: [2.10, 1.37, 0], halfSize: [0.18, 0.08, 0.38] },
+    ],
     collider: {
       id: 'su7_cargo_volume_proxy_v1',
       sections: [
@@ -153,7 +173,8 @@ export const su7ConceptPack = {
         { y: 1.42, polygon: [[1.52, -0.35], [1.68, -0.35], [1.75, -0.47], [2.12, -0.47], [2.27, -0.35], [2.27, 0.35], [2.12, 0.47], [1.75, 0.47], [1.68, 0.35], [1.52, 0.35]] },
       ],
       color: '#25e6c2',
-      maxInstances: 20,
+      /** Rendering safety ceiling; physical capacity is decided by the solver. */
+      maxInstances: 12,
       snapDistance: 0.05,
       snapGap: 0.005,
     },
@@ -409,9 +430,9 @@ export const su7ConceptPack = {
     lights_headlight: {
       durationMs: 420,
       conflictGroup: 'lights_front',
-      color: '#cce7ff',
-      emissiveIntensity: [0, 5] as const,
-      lensEmissiveIntensity: [0, 0.65] as const,
+      color: '#f4f7ff',
+      emissiveIntensity: [0, 7] as const,
+      lensEmissiveIntensity: [0, 0] as const,
       emissiveNodes: [
         'XiaomicarLightPlastic_Chroming_1_1__carLightPlastic_Chroming_1_001_lambert230_Light_Chroaming_0',
         'XiaomicarLightPlastic_Chroming_2_1__carLightPlastic_Chroming_2_001_lambert230_Light_Chroaming_0',
@@ -469,6 +490,21 @@ export const su7ConceptPack = {
     },
   },
   appearance: {
+    reference: {
+      modelYear: 2025,
+      url: officialWebsite.url,
+      note: 'Five exterior colours visually approximated from Xiaomi SU7 Ultra official 2025 launch imagery, not measured factory paint values. Yellow retains its silver livery; other colours use an unstriped finish. Seat accents are demo customisations on the existing mesh, not a factory configurator.',
+    },
+    paint: { material: 'CarPaint', options: paintOptions },
+    seats: {
+      materials: ['Seat_Texture', 'Rear_Seat_Texture'], options: seatOptions,
+      colorMaps: ['/assets/vehicle/seat-front-original.png', '/assets/vehicle/seat-rear-original.png'],
+    },
+    headlightCover: {
+      semanticIds: ['headlight_left', 'headlight_right'] as const,
+      color: '#ffffff', opacity: 0.12, roughness: 0.03,
+      clearcoat: 0.2, clearcoatRoughness: 0.03, envMapIntensity: 0.3,
+    },
     /** Only visually dominant exterior materials participate in shadow maps. */
     shadowCasterMaterials: ['CarPaint', 'Roof', 'tire', 'RIM_1', 'Color_rim'],
     shadowReceiverMaterials: ['CarPaint', 'Roof', 'tire'],
@@ -484,13 +520,18 @@ export const su7ConceptPack = {
       { material: 'Roof_Glass', color: '#090b0e', metalness: 0.15, roughness: 0.18, removeColorMap: true },
       {
         material: 'CarPaint',
-        color: '#ffffff',
-        metalness: 0.38,
-        roughness: 0.36,
+        color: '#d8d8d2',
+        metalness: 0.22,
+        roughness: 0.3,
+        clearcoat: 0.85,
+        clearcoatRoughness: 0.2,
+        specularIntensity: 0.75,
         removeColorMap: false,
-        note: 'The Ddiaz GLB embeds the intended yellow paint, center silver stripes, side stripes and Ultra wordmarks in CarPaint.baseColorTexture; keep the original map and use a neutral white tint.',
+        note: 'Keep the native paint/decal map; a restrained neutral tint and dielectric clearcoat replace the previous full-white boost. Concept recolours affect yellow paint only.',
       },
       { material: 'Windows', color: '#020305', metalness: 0.0, roughness: 0.2, removeColorMap: true },
+      { material: 'Seat_Texture', color: '#ffffff', metalness: 0, roughness: 0.86, removeColorMap: false },
+      { material: 'Rear_Seat_Texture', color: '#ffffff', metalness: 0, roughness: 0.86, removeColorMap: false },
       { material: 'Brilliant_Black', color: '#050608', metalness: 0.04, roughness: 0.56, removeColorMap: true },
       { material: 'BrilliantGray', color: '#050608', metalness: 0.04, roughness: 0.6, removeColorMap: true },
       { material: 'Brilliant_Silver', color: '#050608', metalness: 0.04, roughness: 0.6, removeColorMap: true },
@@ -716,22 +757,22 @@ export const su7ConceptPack = {
   },
   orbitActions: {
     hero_front_left: {
-      position: [-6.25, 2.25, 4.6],
+      position: [-6.25, 1.65, 4.6],
       target: [0, 0.72, 0],
       transitionMs: 450,
     },
     front: {
-      position: [-7.2, 1.65, 0],
+      position: [-7.2, 1.3, 0],
       target: [0, 0.72, 0],
       transitionMs: 450,
     },
     driver_side: {
-      position: [0, 1.7, 7.1],
+      position: [0, 1.3, 7.1],
       target: [0, 0.72, 0],
       transitionMs: 450,
     },
     rear_three_quarter: {
-      position: [6.1, 2.15, -4.8],
+      position: [6.1, 1.55, -4.8],
       target: [0, 0.72, 0],
       transitionMs: 450,
     },
@@ -746,7 +787,7 @@ export const su7ConceptPack = {
       transitionMs: 650,
     },
     turntable: {
-      position: [-5.8, 2.15, 5.8],
+      position: [-5.8, 1.65, 5.8],
       target: [0, 0.72, 0],
       transitionMs: 1_200,
       autoRotate: true,

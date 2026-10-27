@@ -1,0 +1,77 @@
+[
+  {
+    "id": "storage",
+    "keywords": [
+      "后备箱",
+      "后备厢",
+      "尾门",
+      "储物",
+      "装东西",
+      "行李",
+      "装载"
+    ],
+    "actions": [
+      {
+        "type": "orbit",
+        "preset": "rear_three_quarter"
+      },
+      {
+        "type": "trunk",
+        "open": true
+      }
+    ],
+    "followUps": [
+      "Ultra 的后备箱容量来源有差异吗？",
+      "看看主驾车窗"
+    ]
+  },
+  {
+    "id": "performance",
+    "keywords": [
+      "性能",
+      "零百",
+      "加速",
+      "动力",
+      "赛道"
+    ],
+    "actions": [
+      {
+        "type": "orbit",
+        "preset": "front"
+      },
+      {
+        "type": "lights",
+        "target": "headlight",
+        "on": true
+      }
+    ],
+    "followUps": [
+      "零百加速的测试条件是什么？",
+      "制动距离是多少？"
+    ]
+  },
+  {
+    "id": "window",
+    "keywords": [
+      "车窗",
+      "主驾",
+      "驾驶位",
+      "通风"
+    ],
+    "actions": [
+      {
+        "type": "orbit",
+        "preset": "driver_side"
+      },
+      {
+        "type": "window",
+        "target": "driver_front",
+        "open": true,
+        "progress": 100
+      }
+    ],
+    "followUps": [
+      "家庭储物有什么限制？"
+    ]
+  }
+]

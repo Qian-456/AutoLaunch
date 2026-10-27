@@ -57,7 +57,8 @@ function loadingPlacement(
     rotation: candidate.rotation,
     occupiedBounds: candidate.bounds,
     supportHeight: candidate.supportHeight,
-    contactOffsetY: candidate.contactOffsetY,
+    collisionCenter: candidate.collisionCenter,
+    worldGroundContacts: candidate.worldGroundContacts,
     anchorId: candidate.anchorId,
     transitionFrom,
   }
@@ -71,7 +72,7 @@ function placementReasonMessage(reason: keyof typeof cargoReasonLabels | null) {
   return reason ? cargoReasonLabels[reason] : '请将箱子移动到后备箱地板内'
 }
 
-function dispatchCargoAction(action: CargoAction): DispatchResult {
+function dispatchCargoAction(action: CargoAction, source: 'manual' | 'script' | 'rag'): DispatchResult {
   const state = useExperienceStore.getState()
   if (action.operation === 'demonstrate') {
     const propIds: PropId[] = ['checked_24', 'carry_on_20']
@@ -79,12 +80,16 @@ function dispatchCargoAction(action: CargoAction): DispatchResult {
     for (const propId of propIds) {
       const candidate = findCargoPlacement(propId, placements, propId === 'checked_24' ? 'rear_left' : 'rear_right', 'flat')
       if (!candidate.ok) return { ok: false, message: '真实空间内无法生成双箱并排布局' }
-      placements.push(loadingPlacement(createCargoInstanceId(propId), propId, candidate.candidate))
+      const entry = findProp(propId)
+      const transitionFrom = entry
+        ? [entry.stagePosition[0], entry.stagePosition[1] + entry.dimensionsM[0] / 2, entry.stagePosition[2]] as const
+        : undefined
+      placements.push(loadingPlacement(createCargoInstanceId(propId), propId, candidate.candidate, transitionFrom))
     }
     state.setCargoPlacements(placements)
     state.setCargoPlacementSession(null)
     state.setSelectedCargoInstance(null)
-    dispatchVehicleAction({ type: 'trunk', open: true })
+    dispatchVehicleAction({ type: 'trunk', open: true }, source)
     state.requestOrbit('cargo_rear')
     return { ok: true, message: '正在按真实后备箱边界演示双箱并排装载' }
   }
@@ -128,7 +133,7 @@ function dispatchCargoAction(action: CargoAction): DispatchResult {
       originalPlacement: null,
     })
     state.setSelectedCargoInstance(null)
-    dispatchVehicleAction({ type: 'trunk', open: true })
+    dispatchVehicleAction({ type: 'trunk', open: true }, source)
     state.requestOrbit('cargo_rear')
     return { ok: true, message: '移动鼠标放置；滚轮或 Q/E 旋转，R 切换姿态，单击确认' }
   }
@@ -384,13 +389,40 @@ function dispatchSingle(action: VehicleRuntimeAction): DispatchResult {
   return { ok: true, message: `${labelOf(action)}：动作已开始`, actionId: execution.id }
 }
 
-export function dispatchVehicleAction(action: VehicleAction): DispatchResult {
-  if (action.type === 'cargo') return dispatchCargoAction(action)
+export function dispatchVehicleAction(action: VehicleAction, source: 'manual' | 'script' | 'rag' = 'manual'): DispatchResult {
+  return dispatchVehicleActions([action], source)[0]
+}
+
+export function dispatchVehicleActions(actions: readonly VehicleAction[], source: 'manual' | 'script' | 'rag' = 'manual'): DispatchResult[] {
+  // One takeover per intention keeps later part actions from cancelling its camera.
+  if (actions.length && source !== 'script') useExperienceStore.getState().interruptPlayback()
+  return actions.map((action) => dispatchTrackedAction(action, source))
+}
+
+function dispatchTrackedAction(action: VehicleAction, source: 'manual' | 'script' | 'rag'): DispatchResult {
+  const state = useExperienceStore.getState()
+  const existing = new Set(useExperienceStore.getState().activeActions.keys())
+  const result = dispatchCore(action, source)
+  if (source === 'script' && action.type === 'cargo' && action.operation === 'demonstrate' && result.ok) {
+    const current = useExperienceStore.getState()
+    for (const placement of current.cargoPlacements.values()) current.setCargoPlacement({ ...placement, sourcePlanId: current.planId })
+  }
+  const activeActions = new Map(useExperienceStore.getState().activeActions)
+  let changed = false
+  for (const [id, execution] of activeActions) {
+    if (!existing.has(id)) { activeActions.set(id, { ...execution, source }); changed = true }
+  }
+  if (changed) useExperienceStore.setState({ activeActions })
+  return result
+}
+
+function dispatchCore(action: VehicleAction, source: 'manual' | 'script' | 'rag'): DispatchResult {
+  if (action.type === 'cargo') return dispatchCargoAction(action, source)
   if (action.type === 'orbit') {
     const definition = su7ConceptPack.orbitActions[action.preset]
     if (!definition) return { ok: false, message: `未注册的环绕动作：${action.preset}` }
     useExperienceStore.getState().requestOrbit(action.preset)
-    return { ok: true, message: `镜头已切换：${action.preset}` }
+    return { ok: true, message: '已切换到所选镜头' }
   }
 
   if (action.type === 'window' && action.target === 'all') {
