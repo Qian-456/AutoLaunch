@@ -345,7 +345,7 @@ export function App() {
           <Canvas
             shadows
             dpr={[1, 1.5]}
-            camera={{ position: [-6.25, 2.25, 4.6], fov: 28, near: 0.1, far: 500 }}
+            camera={{ position: [...su7ConceptPack.orbitActions.hero_front_left.position], fov: 28, near: 0.1, far: 500 }}
             gl={{
               antialias: true,
               alpha: false,

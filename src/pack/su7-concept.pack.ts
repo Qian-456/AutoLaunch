@@ -754,22 +754,22 @@ export const su7ConceptPack = {
   },
   orbitActions: {
     hero_front_left: {
-      position: [-6.25, 2.25, 4.6],
+      position: [-6.25, 1.65, 4.6],
       target: [0, 0.72, 0],
       transitionMs: 450,
     },
     front: {
-      position: [-7.2, 1.65, 0],
+      position: [-7.2, 1.3, 0],
       target: [0, 0.72, 0],
       transitionMs: 450,
     },
     driver_side: {
-      position: [0, 1.7, 7.1],
+      position: [0, 1.3, 7.1],
       target: [0, 0.72, 0],
       transitionMs: 450,
     },
     rear_three_quarter: {
-      position: [6.1, 2.15, -4.8],
+      position: [6.1, 1.55, -4.8],
       target: [0, 0.72, 0],
       transitionMs: 450,
     },
@@ -784,7 +784,7 @@ export const su7ConceptPack = {
       transitionMs: 650,
     },
     turntable: {
-      position: [-5.8, 2.15, 5.8],
+      position: [-5.8, 1.65, 5.8],
       target: [0, 0.72, 0],
       transitionMs: 1_200,
       autoRotate: true,

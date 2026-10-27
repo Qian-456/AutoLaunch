@@ -2,10 +2,11 @@ import { useEffect, useRef } from 'react'
 import { OrbitControls } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
-import { MOUSE, PerspectiveCamera, Vector3 } from 'three'
+import { MathUtils, MOUSE, PerspectiveCamera, Vector3 } from 'three'
 import { su7ConceptPack } from '../pack/su7-concept.pack'
 import { useExperienceStore } from '../store/experience-store'
 import type { OrbitActionDefinition } from '../types'
+import { composeVehicleCamera } from '../runtime/camera-composition'
 
 const smoothStep = (value: number) => value * value * (3 - 2 * value)
 
@@ -20,7 +21,7 @@ export function OrbitCameraRig({ insets = [0, 0, 0, 0] }: { insets?: readonly [n
     toTarget: Vector3
   }>(null)
   const { camera, gl, size } = useThree()
-  const [left, right, top, bottom] = insets
+  const uprightBlend = useRef(1)
   const playback = useExperienceStore((state) => state.playback)
   const activeOrbitPreset = useExperienceStore((state) => state.activeOrbitPreset)
   const orbitRequestId = useExperienceStore((state) => state.orbitRequestId)
@@ -31,10 +32,8 @@ export function OrbitCameraRig({ insets = [0, 0, 0, 0] }: { insets?: readonly [n
 
   useEffect(() => {
     if (!(camera instanceof PerspectiveCamera)) return
-    // Extend the safe viewing area across the full canvas, keeping scenery continuous.
-    camera.setViewOffset(Math.max(1, size.width - left - right), Math.max(1, size.height - top - bottom), -left, -top, size.width, size.height)
     return () => { camera.clearViewOffset() }
-  }, [camera, size.width, size.height, left, right, top, bottom])
+  }, [camera])
 
   useEffect(() => {
     // Claim control before OrbitControls' pointer listener sees this same event.
@@ -80,6 +79,13 @@ export function OrbitCameraRig({ insets = [0, 0, 0, 0] }: { insets?: readonly [n
     controls.target.lerpVectors(active.fromTarget, active.toTarget, eased)
     controls.update()
     if (progress === 1) transition.current = null
+  })
+
+  useFrame((_, delta) => {
+    if (!(camera instanceof PerspectiveCamera) || !controlsRef.current) return
+    const overview = activeOrbitPreset === 'cargo_overview'
+    uprightBlend.current = MathUtils.damp(uprightBlend.current, overview ? 0 : 1, 12, delta)
+    composeVehicleCamera(camera, controlsRef.current.target, size.width, size.height, insets, uprightBlend.current)
   })
 
   return (
